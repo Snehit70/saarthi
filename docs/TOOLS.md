@@ -121,6 +121,18 @@ Picks first empty numeric workspace in the given range based on current mapped w
 - `rangeStart`
 - `rangeEnd`
 
+## `workspace_focus_relative`
+
+### Inputs
+
+- `direction: "left" | "right"`
+- `fallback?: "stay" | "wrap"` (default `stay`)
+
+### Behavior
+
+Moves focus to a workspace on neighboring monitor by monitor-column order (`x`, then `y`).
+If no neighbor exists, `wrap` jumps to opposite edge monitor; `stay` keeps current monitor workspace.
+
 ## `app_launch`
 
 ### Inputs
@@ -305,6 +317,23 @@ Filters live windows for agent composition flows like:
 - `hidden`
 - `position { x, y }`
 - `size { width, height }`
+
+## `window_focus_best`
+
+### Inputs
+
+- `classEquals?: string`
+- `classContains?: string`
+- `titleContains?: string`
+- `workspace?: string`
+- `includeHidden?: boolean` (default `false`)
+- `preferredWorkspace?: string`
+- `preferredMonitor?: string`
+- `limit?: number` (default `5`)
+
+### Behavior
+
+Finds matching windows, ranks candidates, focuses best actionable match, and returns candidate scores.
 
 ## `desktop_screenshot`
 

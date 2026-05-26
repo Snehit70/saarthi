@@ -21,10 +21,12 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `window_list`
 - `window_get`
 - `window_find`
+- `window_focus_best`
 - `window_focus`
 - `window_move`
 - `window_resize`
 - `workspace_focus`
+- `workspace_focus_relative`
 - `window_send_to_workspace`
 - `key_press`
 - `mouse_get_position`

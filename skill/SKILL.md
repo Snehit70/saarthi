@@ -23,13 +23,15 @@ Do not type, send, delete, archive, block, clear, or navigate away unless the cu
 
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
 2. `workspace_topology` when task depends on monitor columns/left-right workspace placement
-3. `desktop_screenshot_save`
-4. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery
-5. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
-6. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
-7. `grid_click` or `mouse_click`
-8. `desktop_screenshot_save` or OCR verification
-9. `type_text` / `window_focus_and_type` only after target state is verified
+3. `workspace_focus_relative` for deterministic left/right column hops
+4. `window_focus_best` when `window_find` has multiple candidates
+5. `desktop_screenshot_save`
+6. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery
+7. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
+8. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
+9. `grid_click` or `mouse_click`
+10. `desktop_screenshot_save` or OCR verification
+11. `type_text` / `window_focus_and_type` only after target state is verified
 
 Prefer `target: "window"` with a concrete `windowId` over `active_window` for multi-step work. This avoids focus drift.
 

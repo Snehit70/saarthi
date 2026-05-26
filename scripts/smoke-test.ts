@@ -58,10 +58,12 @@ async function main(): Promise<void> {
       "window_list",
       "window_get",
       "window_find",
+      "window_focus_best",
       "window_focus",
       "window_move",
       "window_resize",
       "workspace_focus",
+      "workspace_focus_relative",
       "window_send_to_workspace",
       "key_press",
       "grid_show",
@@ -97,6 +99,11 @@ async function main(): Promise<void> {
     if (wsList.isError) fail("workspace_list returned error");
     const wsTopology = (await client.callTool({ name: "workspace_topology", arguments: {} })) as ToolResult;
     if (wsTopology.isError) fail("workspace_topology returned error");
+    const wsRelative = (await client.callTool({
+      name: "workspace_focus_relative",
+      arguments: { direction: "right", fallback: "stay" },
+    })) as ToolResult;
+    if (wsRelative.isError) fail("workspace_focus_relative returned error");
 
     const wsPick = (await client.callTool({ name: "workspace_pick_empty", arguments: { rangeStart: 1, rangeEnd: 10 } })) as ToolResult;
     if (wsPick.isError) fail("workspace_pick_empty returned error");
@@ -127,6 +134,11 @@ async function main(): Promise<void> {
       arguments: { focusedOnly: true, limit: 1 },
     })) as ToolResult;
     if (findResp.isError) fail("window_find returned error");
+    const focusBest = (await client.callTool({
+      name: "window_focus_best",
+      arguments: { includeHidden: false, limit: 3 },
+    })) as ToolResult;
+    if (focusBest.isError) fail("window_focus_best returned error");
 
     if (windows.length > 0) {
       const id = windows[0].id;
