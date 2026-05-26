@@ -2769,6 +2769,8 @@ server.registerTool(
     },
   },
   async (args) => {
+    const started = Date.now();
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (args.command && !policy.launch.allowCustomCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Custom launch command is disabled by policy");
     }
@@ -2790,41 +2792,79 @@ server.registerTool(
     assertLaunchRateLimit();
     const originalWorkspace = args.keepCurrentWorkspace ? await focusedWorkspaceName() : null;
     const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${parsed.normalized}` : parsed.normalized;
+    const payload = {
+      appName: args.appName ?? null,
+      command: parsed.normalized,
+      workspace: targetWorkspace ?? null,
+      preferEmptyWorkspace: args.preferEmptyWorkspace,
+      rangeStart: effectiveRange.rangeStart,
+      rangeEnd: effectiveRange.rangeEnd,
+      keepCurrentWorkspace: args.keepCurrentWorkspace,
+      classEquals: args.classEquals ?? null,
+      classContains: args.classContains ?? null,
+      titleContains: args.titleContains ?? null,
+      timeoutMs: args.timeoutMs,
+      pollMs: args.pollMs,
+      launchCommand,
+    };
 
-    if (!dryRun) {
-      await hyprctlDispatch("exec", launchCommand);
-      if (args.keepCurrentWorkspace && originalWorkspace && targetWorkspace && originalWorkspace !== targetWorkspace) {
-        try {
-          await hyprctlDispatch("workspace", originalWorkspace);
-        } catch {
-          // keep success
+    try {
+      if (!dryRun) {
+        await hyprctlDispatch("exec", launchCommand);
+        if (args.keepCurrentWorkspace && originalWorkspace && targetWorkspace && originalWorkspace !== targetWorkspace) {
+          try {
+            await hyprctlDispatch("workspace", originalWorkspace);
+          } catch {
+            // keep success
+          }
         }
       }
-    }
 
-    const wait = await waitForWindow(
-      {
-        classEquals: args.classEquals,
-        classContains: args.classContains,
-        titleContains: args.titleContains,
-        workspace: targetWorkspace,
-      },
-      args.timeoutMs,
-      args.pollMs,
-    );
-    if (dryRun) {
+      const wait = await waitForWindow(
+        {
+          classEquals: args.classEquals,
+          classContains: args.classContains,
+          titleContains: args.titleContains,
+          workspace: targetWorkspace,
+        },
+        args.timeoutMs,
+        args.pollMs,
+      );
+      if (dryRun) {
+        await audit("app_launch_and_wait", payload, dryRun, {
+          requestId,
+          result: "ok",
+          errorCode: null,
+          durationMs: Date.now() - started,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ dryRun: true, launchCommand, waitedAttempts: wait.attempts }, null, 2) }],
+          structuredContent: { dryRun: true, launchCommand, waitedAttempts: wait.attempts },
+        };
+      }
+      if (!wait.found) {
+        throw new HyprlandError("WINDOW_NOT_FOUND", `Launch succeeded but no matching window appeared within ${args.timeoutMs}ms`);
+      }
+      await audit("app_launch_and_wait", { ...payload, attempts: wait.attempts }, dryRun, {
+        requestId,
+        result: "ok",
+        errorCode: null,
+        durationMs: Date.now() - started,
+      });
       return {
-        content: [{ type: "text", text: JSON.stringify({ dryRun: true, launchCommand, waitedAttempts: wait.attempts }, null, 2) }],
-        structuredContent: { dryRun: true, launchCommand, waitedAttempts: wait.attempts },
+        content: [{ type: "text", text: JSON.stringify({ launchCommand, workspace: targetWorkspace ?? null, window: wait.found, attempts: wait.attempts }, null, 2) }],
+        structuredContent: { launchCommand, workspace: targetWorkspace ?? null, window: wait.found, attempts: wait.attempts },
       };
+    } catch (err) {
+      const errorCode = err instanceof HyprlandError ? err.code : "APP_LAUNCH_FAILED";
+      await audit("app_launch_and_wait", payload, dryRun, {
+        requestId,
+        result: "error",
+        errorCode,
+        durationMs: Date.now() - started,
+      });
+      throw err;
     }
-    if (!wait.found) {
-      throw new HyprlandError("WINDOW_NOT_FOUND", `Launch succeeded but no matching window appeared within ${args.timeoutMs}ms`);
-    }
-    return {
-      content: [{ type: "text", text: JSON.stringify({ launchCommand, workspace: targetWorkspace ?? null, window: wait.found, attempts: wait.attempts }, null, 2) }],
-      structuredContent: { launchCommand, workspace: targetWorkspace ?? null, window: wait.found, attempts: wait.attempts },
-    };
   },
 );
 
