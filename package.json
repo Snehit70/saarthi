@@ -1,0 +1,26 @@
+{
+  "name": "use-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Hyprland MCP server for window control and screenshots",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/src/index.js",
+    "test": "vitest run",
+    "smoke": "npx tsc -p tsconfig.json && node dist/scripts/smoke-test.js",
+    "smoke:screenshot": "npx tsc -p tsconfig.json && node dist/scripts/smoke-test.js --with-screenshot"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  }
+}
