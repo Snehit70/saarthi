@@ -140,7 +140,7 @@ For persistent proof and later inspection:
 
 Mutating tool calls append to:
 
-- `~/.local/state/use-mcp/audit.jsonl`
+- `~/.local/state/saarthi/audit.jsonl`
 - `./logs/actions/run.jsonl` (repo-local action traces for grid and verification tools)
 
 Event shape:

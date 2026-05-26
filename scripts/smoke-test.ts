@@ -34,7 +34,7 @@ async function main(): Promise<void> {
     });
   }
 
-  const client = new Client({ name: "use-mcp-smoke", version: "0.1.0" }, { capabilities: {} });
+  const client = new Client({ name: "saarthi-smoke", version: "0.1.0" }, { capabilities: {} });
 
   try {
     await client.connect(transport);

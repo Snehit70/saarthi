@@ -2,7 +2,7 @@
 
 ## Goal
 
-Evolve `use-mcp` from a solid primitive set into a reliable agentic desktop-control layer that can:
+Evolve `saarthi` from a solid primitive set into a reliable agentic desktop-control layer that can:
 
 1. discover targets robustly
 2. act safely with predictable outcomes
@@ -135,7 +135,7 @@ Output:
 
 Create config file:
 
-- `/home/snehit/projects/use/config/policy.json`
+- `/home/snehit/projects/saarthi/config/policy.json`
 
 Policy sections:
 

@@ -32,7 +32,7 @@ import { cellToRelativePoint as gridCellToRelativePoint, defaultGridForSize } fr
 import type { WindowId } from "./lib/types.js";
 
 const dryRun = process.env.USE_MCP_DRY_RUN === "1";
-const screenshotDirDefault = join(homedir(), "Pictures", "use-mcp");
+const screenshotDirDefault = join(homedir(), "Pictures", "saarthi");
 const execFileAsync = promisify(execFile);
 
 interface AppCatalogEntry {
@@ -491,7 +491,7 @@ async function performFindTextOnScreen(input: {
     throw new HyprlandError("OCR_FAILED", "tesseract is not installed");
   }
   const shot = await captureScreenshot({ target: input.target, monitorName: input.monitorName, windowId: input.windowId });
-  const tempDir = await mkdtemp(join(tmpdir(), "use-mcp-ocr-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "saarthi-ocr-"));
   const imagePath = join(tempDir, "screen.png");
   try {
     await writeFile(imagePath, shot.png);
@@ -558,7 +558,7 @@ async function resolveTextClickPoint(input: {
 }
 
 const server = new McpServer({
-  name: "use-mcp",
+  name: "saarthi",
   version: "0.1.0",
 });
 
@@ -2206,7 +2206,7 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   const message = formatError(error);
-  process.stderr.write(`use-mcp fatal error: ${message}\n`);
+  process.stderr.write(`saarthi fatal error: ${message}\n`);
   process.exit(1);
 });
 

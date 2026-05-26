@@ -1,11 +1,11 @@
 ---
-name: use-mcp-computer-use
-description: Use when controlling the local Hyprland desktop through the use-mcp server, especially browser, WhatsApp Web, PDF viewer, window/workspace, screenshot, OCR, grid, mouse, and keyboard tasks that require verified real-screen interaction.
+name: saarthi-computer-use
+description: Use when controlling the local Hyprland desktop through the saarthi server, especially browser, WhatsApp Web, PDF viewer, window/workspace, screenshot, OCR, grid, mouse, and keyboard tasks that require verified real-screen interaction.
 ---
 
-# use-mcp Computer Use
+# saarthi Computer Use
 
-Use this skill for real desktop work through the `use-mcp` MCP server. The goal is reliable interaction, not fastest possible clicking.
+Use this skill for real desktop work through the `saarthi` MCP server. The goal is reliable interaction, not fastest possible clicking.
 
 ## Core Rule
 

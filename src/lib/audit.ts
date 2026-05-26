@@ -2,7 +2,7 @@ import { mkdir, appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-const AUDIT_PATH = join(homedir(), ".local", "state", "use-mcp", "audit.jsonl");
+const AUDIT_PATH = join(homedir(), ".local", "state", "saarthi", "audit.jsonl");
 
 interface AuditEvent {
   timestamp: string;

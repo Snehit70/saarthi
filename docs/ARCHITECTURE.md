@@ -1,8 +1,8 @@
-# use-mcp Architecture
+# saarthi Architecture
 
 ## Purpose
 
-`use-mcp` is a local MCP server for Hyprland desktop operations with a narrow v1 scope:
+`saarthi` is a local MCP server for Hyprland desktop operations with a narrow v1 scope:
 
 - inspect desktop and windows
 - query windows by class/title/focus/workspace

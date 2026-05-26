@@ -312,7 +312,7 @@ Filters live windows for agent composition flows like:
 - `monitorName?: string`
 - `windowId?: string`
 - `filenamePrefix?: string` (default `screenshot`)
-- `outputDir?: string` (default `~/Pictures/use-mcp`)
+- `outputDir?: string` (default `~/Pictures/saarthi`)
 
 ### Behavior
 
