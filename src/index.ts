@@ -1879,6 +1879,7 @@ server.registerTool(
       sinceIso: z.string().optional(),
       lastN: z.number().int().min(1).max(5000).default(500),
       outputPath: z.string().optional(),
+      includeLegacy: z.boolean().default(false),
     },
     annotations: {
       readOnlyHint: false,
@@ -1887,21 +1888,33 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ sessionId, taskId, sinceIso, lastN, outputPath }) => {
+  async ({ sessionId, taskId, sinceIso, lastN, outputPath, includeLegacy }) => {
     const [auditEvents, runEvents] = await Promise.all([readJsonl(auditLogPath), readJsonl(runLogPath)]);
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
     const filteredAudit = auditEvents.filter((e) => {
       const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
       if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession && e.sessionId && e.sessionId !== selectedSession) return false;
+      if (selectedSession) {
+        if (e.sessionId !== selectedSession) {
+          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
+            return false;
+          }
+        }
+      }
       if (taskId && e.taskId && e.taskId !== taskId) return false;
       return true;
     });
     const filteredRun = runEvents.filter((e) => {
       const ts = typeof e.ts === "string" ? Date.parse(e.ts) : NaN;
       if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession && e.sessionId && e.sessionId !== selectedSession) return false;
+      if (selectedSession) {
+        if (e.sessionId !== selectedSession) {
+          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
+            return false;
+          }
+        }
+      }
       if (taskId && e.taskId && e.taskId !== taskId) return false;
       return true;
     });
@@ -1934,6 +1947,7 @@ server.registerTool(
       sessionId: z.string().optional(),
       sinceIso: z.string().optional(),
       lastN: z.number().int().min(1).max(100000).default(5000),
+      includeLegacy: z.boolean().default(false),
     },
     annotations: {
       readOnlyHint: true,
@@ -1942,7 +1956,7 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ sessionId, sinceIso, lastN }) => {
+  async ({ sessionId, sinceIso, lastN, includeLegacy }) => {
     const auditEvents = await readJsonl(auditLogPath);
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
@@ -1950,7 +1964,13 @@ server.registerTool(
       .filter((e) => {
         const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
         if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-        if (selectedSession && e.sessionId && e.sessionId !== selectedSession) return false;
+        if (selectedSession) {
+          if (e.sessionId !== selectedSession) {
+            if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
+              return false;
+            }
+          }
+        }
         return true;
       })
       .slice(-lastN);
