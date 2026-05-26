@@ -42,6 +42,7 @@ For Flatpak launch forms (`flatpak run <app-id>`), install detection validates a
 - `sessionId?: string` (defaults to current server session)
 - `sinceIso?: string`
 - `lastN?: number` (default `5000`)
+- `includeLegacy?: boolean` (default `false`)
 
 ### Behavior
 
@@ -53,6 +54,9 @@ Computes KPI metrics from audit telemetry:
 - task completion stats (when `taskId` is present)
 - per-action totals and error rates
 
+Session scoping is strict by default: only events with exact matching `sessionId` are included.
+Set `includeLegacy=true` to also include legacy rows that have no `sessionId`.
+
 ## `session_trace_export`
 
 ### Inputs
@@ -62,10 +66,12 @@ Computes KPI metrics from audit telemetry:
 - `sinceIso?: string`
 - `lastN?: number` (default `500`)
 - `outputPath?: string`
+- `includeLegacy?: boolean` (default `false`)
 
 ### Behavior
 
 Exports merged audit + run trace events to a JSON file for later analysis.
+Session filtering is strict by default; `includeLegacy=true` also includes legacy rows without `sessionId`.
   - `launchCommand`
 
 ## `desktop_health`
@@ -166,6 +172,8 @@ Picks first empty numeric workspace in the given range based on current mapped w
 Moves focus to a workspace on neighboring monitor by monitor-column order (`x`, then `y`).
 If no neighbor exists, `wrap` jumps to opposite edge monitor; `stay` keeps current monitor workspace.
 When target monitor has no workspace and `createIfAbsent=true`, it creates/switches to first free numeric workspace in policy bounds.
+If `createIfAbsent=false` and the neighbor has no workspace, it stays on current workspace (`changed=false`).
+If numeric workspace range is exhausted, it also stays on current workspace with reason `no_available_numeric_workspace`.
 
 ## `app_launch`
 

@@ -184,10 +184,12 @@ KPI report via MCP tool:
   - `durations.p50Ms` / `durations.p95Ms`
   - `loops.loopEvents` / `loops.retryAttempts`
   - task completion stats (`tasks.*`) when `taskId` is present
+  - strict current-session view by default (`includeLegacy=false`)
 
 Trace export via MCP tool:
 
 - `session_trace_export` writes merged audit+run events to `logs/exports/*.json`
+  - defaults to strict current-session events; pass `includeLegacy=true` to include old rows missing `sessionId`
 
 ## Common failure modes
 
