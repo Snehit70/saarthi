@@ -146,9 +146,20 @@ Mutating tool calls append to:
 Event shape:
 
 - `timestamp`
+- `sessionId`
+- `taskId`
+- `stepId`
+- `startedAt`
+- `endedAt`
+- `status`
 - `action`
 - `payload`
 - `dryRun`
+- `result`
+- `errorCode`
+- `durationMs`
+- `attempt`
+- `retryOf`
 
 Run-log event shape (repo-local):
 
@@ -165,6 +176,18 @@ tail -n 50 logs/actions/run.jsonl
 ```bash
 rg -n '"action":"grid_' logs/actions/run.jsonl
 ```
+
+KPI report via MCP tool:
+
+- `metrics_report` gives:
+  - `errorRate`
+  - `durations.p50Ms` / `durations.p95Ms`
+  - `loops.loopEvents` / `loops.retryAttempts`
+  - task completion stats (`tasks.*`) when `taskId` is present
+
+Trace export via MCP tool:
+
+- `session_trace_export` writes merged audit+run events to `logs/exports/*.json`
 
 ## Common failure modes
 

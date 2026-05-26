@@ -44,6 +44,8 @@ async function main(): Promise<void> {
     const required = [
       "app_list",
       "desktop_health",
+      "metrics_report",
+      "session_trace_export",
       "desktop_screenshot",
       "desktop_screenshot_save",
       "workspace_list",
@@ -92,6 +94,10 @@ async function main(): Promise<void> {
 
     const health = (await client.callTool({ name: "desktop_health", arguments: {} })) as ToolResult;
     if (health.isError) fail("desktop_health returned error");
+    const metrics = (await client.callTool({ name: "metrics_report", arguments: { lastN: 200 } })) as ToolResult;
+    if (metrics.isError) fail("metrics_report returned error");
+    const trace = (await client.callTool({ name: "session_trace_export", arguments: { lastN: 100 } })) as ToolResult;
+    if (trace.isError) fail("session_trace_export returned error");
 
     const apps = (await client.callTool({ name: "app_list", arguments: { installedOnly: false } })) as ToolResult;
     if (apps.isError) fail("app_list returned error");

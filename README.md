@@ -6,6 +6,8 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 
 - `app_list`
 - `desktop_health`
+- `metrics_report`
+- `session_trace_export`
 - `desktop_screenshot`
 - `desktop_screenshot_save`
 - `desktop_screenshot_area`

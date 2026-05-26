@@ -34,6 +34,38 @@ For Flatpak launch forms (`flatpak run <app-id>`), install detection validates a
   - `description`
   - `installed`
   - `launchCommand`
+
+## `metrics_report`
+
+### Inputs
+
+- `sessionId?: string` (defaults to current server session)
+- `sinceIso?: string`
+- `lastN?: number` (default `5000`)
+
+### Behavior
+
+Computes KPI metrics from audit telemetry:
+
+- error rate
+- duration percentiles (`p50`, `p95`) from `durationMs` samples
+- loop/retry counters
+- task completion stats (when `taskId` is present)
+- per-action totals and error rates
+
+## `session_trace_export`
+
+### Inputs
+
+- `sessionId?: string`
+- `taskId?: string`
+- `sinceIso?: string`
+- `lastN?: number` (default `500`)
+- `outputPath?: string`
+
+### Behavior
+
+Exports merged audit + run trace events to a JSON file for later analysis.
   - `launchCommand`
 
 ## `desktop_health`
