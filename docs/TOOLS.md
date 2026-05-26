@@ -720,3 +720,41 @@ Captures screenshot, runs Tesseract OCR (TSV), and returns matching text boxes s
 ### Behavior
 
 Loop primitive: find `clickText` with OCR -> click center -> wait -> verify `expectText`. Retries up to `maxAttempts`.
+
+## `action_step`
+
+### Inputs
+
+- `action: "click_text" | "grid_click" | "mouse_click" | "key_press" | "type_text"`
+- `verify?: "none" | "text_present" | "text_absent"` (default `none`)
+- screenshot/target controls:
+  - `target?: "full" | "monitor" | "active_window" | "window"` (default `active_window`)
+  - `monitorName?`
+  - `windowId?`
+  - `outputDir?`
+  - `filenamePrefix?`
+- action controls (depends on `action`):
+  - text/OCR: `query`, `confidenceMin`, `matchIndex`, `offsetX`, `offsetY`, `button`
+  - grid: `cellId`, `button`
+  - mouse: `x`, `y`, `button`
+  - keyboard: `key`, `modifiers`, `repeat`
+  - typing: `text`
+- `settleMs?: number` (default `250`)
+
+### Behavior
+
+Atomic loop:
+
+1. capture and save before screenshot
+2. perform one action
+3. wait settle delay
+4. capture and save after screenshot
+5. verify expected outcome (`none` or OCR text present/absent)
+
+### Structured output
+
+- `ok: boolean`
+- `beforePath`
+- `afterPath`
+- `action` summary
+- `verification` summary

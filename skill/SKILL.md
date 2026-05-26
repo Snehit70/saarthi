@@ -30,8 +30,9 @@ Do not type, send, delete, archive, block, clear, or navigate away unless the cu
 7. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
 8. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
 9. `grid_click` or `mouse_click`
-10. `desktop_screenshot_save` or OCR verification
-11. `type_text` / `window_focus_and_type` only after target state is verified
+10. `action_step` for atomic verify loops when action certainty is critical
+11. `desktop_screenshot_save` or OCR verification
+12. `type_text` / `window_focus_and_type` only after target state is verified
 
 Prefer `target: "window"` with a concrete `windowId` over `active_window` for multi-step work. This avoids focus drift.
 

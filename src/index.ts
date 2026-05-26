@@ -1575,6 +1575,165 @@ server.registerTool(
 );
 
 server.registerTool(
+  "action_step",
+  {
+    title: "Action Step",
+    description: "Atomic loop: capture before screenshot, perform one action, capture after screenshot, and verify outcome.",
+    inputSchema: {
+      action: z.enum(["click_text", "grid_click", "mouse_click", "key_press", "type_text"]),
+      verify: z.enum(["none", "text_present", "text_absent"]).default("none"),
+      target: z.enum(["full", "monitor", "active_window", "window"]).default("active_window"),
+      monitorName: z.string().optional(),
+      windowId: z.string().regex(/^0x[0-9a-fA-F]+$/).optional(),
+      settleMs: z.number().int().min(0).max(5000).default(250),
+      outputDir: z.string().optional(),
+      filenamePrefix: z.string().min(1).max(64).default("action-step"),
+      query: z.string().min(1).max(120).optional(),
+      confidenceMin: z.number().min(0).max(100).default(35),
+      matchIndex: z.number().int().min(0).max(20).default(0),
+      offsetX: z.number().int().min(-500).max(500).default(0),
+      offsetY: z.number().int().min(-500).max(500).default(0),
+      button: z.enum(["left", "middle", "right"]).default("left"),
+      cellId: z.number().int().min(1).optional(),
+      x: z.number().int().min(0).optional(),
+      y: z.number().int().min(0).optional(),
+      key: z.string().min(1).max(32).optional(),
+      modifiers: z.array(z.string().min(1).max(16)).max(4).default([]),
+      repeat: z.number().int().min(1).max(20).default(1),
+      text: z.string().min(1).max(4000).optional(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    const dir = args.outputDir ?? screenshotDirDefault;
+    await mkdir(dir, { recursive: true });
+    const safePrefix = args.filenamePrefix.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+    const before = await captureScreenshot({ target: args.target, monitorName: args.monitorName, windowId: args.windowId as WindowId | undefined });
+    const beforePath = join(dir, `${stamp}-${safePrefix}-before.png`);
+    await writeFile(beforePath, before.png);
+
+    let actionSummary: Record<string, unknown> = { action: args.action };
+    if (args.action === "click_text") {
+      if (!args.query) throw new HyprlandError("INPUT_FAILED", "query is required for action=click_text");
+      const point = await resolveTextClickPoint({
+        query: args.query,
+        target: args.target,
+        monitorName: args.monitorName,
+        windowId: args.windowId as WindowId | undefined,
+        confidenceMin: args.confidenceMin,
+        matchIndex: args.matchIndex,
+        offsetX: args.offsetX,
+        offsetY: args.offsetY,
+      });
+      if (!dryRun) {
+        await performMouseClick(point.absoluteX, point.absoluteY, args.button, 80);
+      }
+      actionSummary = { action: "click_text", query: args.query, button: args.button, absoluteX: point.absoluteX, absoluteY: point.absoluteY };
+    } else if (args.action === "grid_click") {
+      if (!args.cellId) throw new HyprlandError("INPUT_FAILED", "cellId is required for action=grid_click");
+      if (!activeGridSession) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
+      activeGridSession = await ensureGridSessionFresh(activeGridSession);
+      const point = cellToRelativePoint(activeGridSession, args.cellId);
+      const absX = activeGridSession.originAbsoluteX + point.x;
+      const absY = activeGridSession.originAbsoluteY + point.y;
+      if (!dryRun) {
+        await performMouseClick(absX, absY, args.button, 80);
+      }
+      actionSummary = { action: "grid_click", cellId: args.cellId, button: args.button, absoluteX: absX, absoluteY: absY };
+    } else if (args.action === "mouse_click") {
+      if (typeof args.x !== "number" || typeof args.y !== "number") {
+        throw new HyprlandError("INPUT_FAILED", "x and y are required for action=mouse_click");
+      }
+      const resolved = await resolvePointerCoordinates(args.x, args.y, args.target, args.monitorName, args.windowId as WindowId | undefined);
+      if (!dryRun) {
+        await performMouseClick(resolved.x, resolved.y, args.button, 80);
+      }
+      actionSummary = { action: "mouse_click", x: args.x, y: args.y, button: args.button, absoluteX: resolved.x, absoluteY: resolved.y };
+    } else if (args.action === "key_press") {
+      if (!args.key) throw new HyprlandError("INPUT_FAILED", "key is required for action=key_press");
+      const safeKey = normalizeKey(args.key);
+      const safeMods = normalizeModifiers(args.modifiers);
+      if (!dryRun) {
+        const modPart = toHyprShortcutMods(safeMods);
+        const keyPart = toHyprShortcutKey(safeKey);
+        for (let i = 0; i < args.repeat; i += 1) {
+          await hyprctlDispatch("sendshortcut", `${modPart}${modPart ? "," : ""}${keyPart}`);
+          if (args.settleMs > 0 && i < args.repeat - 1) await sleep(args.settleMs);
+        }
+      }
+      actionSummary = { action: "key_press", key: safeKey, modifiers: safeMods, repeat: args.repeat };
+    } else if (args.action === "type_text") {
+      if (!args.text) throw new HyprlandError("INPUT_FAILED", "text is required for action=type_text");
+      const safeText = sanitizeTypedText(args.text);
+      if (!dryRun) {
+        if (!(await commandExists("wtype"))) throw new HyprlandError("INPUT_FAILED", "wtype is not installed");
+        await execFileAsync("wtype", [safeText]);
+      }
+      actionSummary = { action: "type_text", textLength: safeText.length };
+    }
+
+    if (args.settleMs > 0) await sleep(args.settleMs);
+
+    const after = await captureScreenshot({ target: args.target, monitorName: args.monitorName, windowId: args.windowId as WindowId | undefined });
+    const afterPath = join(dir, `${stamp}-${safePrefix}-after.png`);
+    await writeFile(afterPath, after.png);
+
+    let verified = true;
+    let verification: Record<string, unknown> = { mode: args.verify };
+    if (args.verify !== "none") {
+      if (!args.query) {
+        throw new HyprlandError("INPUT_FAILED", "query is required for verify=text_present|text_absent");
+      }
+      const found = await performFindTextOnScreen({
+        query: args.query,
+        target: args.target,
+        monitorName: args.monitorName,
+        windowId: args.windowId as WindowId | undefined,
+        confidenceMin: args.confidenceMin,
+        limit: 1,
+      });
+      const present = found.matches.length > 0;
+      verified = args.verify === "text_present" ? present : !present;
+      verification = { mode: args.verify, query: args.query, present, matches: found.matches };
+    }
+
+    await audit(
+      "action_step",
+      {
+        action: args.action,
+        verify: args.verify,
+        target: args.target,
+        monitorName: args.monitorName ?? null,
+        windowId: args.windowId ?? null,
+        beforePath,
+        afterPath,
+        verified,
+        actionSummary,
+        verification,
+      },
+      dryRun,
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ok: verified, beforePath, afterPath, action: actionSummary, verification, dryRun }, null, 2),
+        },
+      ],
+      structuredContent: { ok: verified, beforePath, afterPath, action: actionSummary, verification, dryRun },
+    };
+  },
+);
+
+server.registerTool(
   "desktop_health",
   {
     title: "Desktop Health",

@@ -83,6 +83,7 @@ async function main(): Promise<void> {
       "find_text_on_screen",
       "click_wait_retry",
       "desktop_screenshot_area",
+      "action_step",
     ];
 
     for (const name of required) {
@@ -273,6 +274,19 @@ async function main(): Promise<void> {
         arguments: { x: 0, y: 0, width: 160, height: 120 },
       })) as ToolResult;
       if (area.isError) fail("desktop_screenshot_area returned error");
+
+      const step = (await client.callTool({
+        name: "action_step",
+        arguments: {
+          action: "key_press",
+          key: "escape",
+          verify: "none",
+          target: "full",
+          filenamePrefix: "smoke-step",
+          settleMs: 50,
+        },
+      })) as ToolResult;
+      if (step.isError) fail("action_step returned error");
     }
 
     process.stdout.write(`SMOKE PASS: ${required.length} tools present, health/window calls succeeded, windows=${windows.length}\n`);
