@@ -121,6 +121,31 @@ function toNumberOrNull(value: string | null): number | null {
   return Number(value);
 }
 
+function isNumericWorkspaceName(name: string): boolean {
+  return /^\d+$/.test(name.trim());
+}
+
+function pickWorkspaceForMonitor(
+  monitorName: string,
+  workspaces: Array<{ name: string; id: number; monitor: string | null }>,
+  occupiedWorkspaceNames: Set<string>,
+): { name: string; created: boolean } {
+  const existing = workspaces
+    .filter((w) => w.monitor === monitorName)
+    .sort((a, b) => a.id - b.id);
+  if (existing[0]) return { name: existing[0].name, created: false };
+
+  for (let i = policy.workspace.min; i <= policy.workspace.max; i += 1) {
+    const candidate = String(i);
+    if (!occupiedWorkspaceNames.has(candidate)) {
+      return { name: candidate, created: true };
+    }
+  }
+
+  // Fallback when all numeric workspaces are occupied: pick the policy minimum workspace.
+  return { name: String(policy.workspace.min), created: true };
+}
+
 const ALLOWED_KEYS = [
   "enter",
   "tab",
@@ -1881,8 +1906,22 @@ server.registerTool(
       return { window: w, score, monitorName: monitorById.get(w.monitor)?.name ?? null };
     });
     scored.sort((a, b) => b.score - a.score);
-    const best = scored[0];
-    await getWindowOrThrow(best.window.id);
+    const actionable: typeof scored = [];
+    for (const candidate of scored) {
+      try {
+        await getWindowOrThrow(candidate.window.id);
+        actionable.push(candidate);
+      } catch {
+        // Keep candidate in ranked list for diagnostics, but skip for focus action.
+      }
+    }
+    if (actionable.length === 0) {
+      throw new HyprlandError(
+        "WINDOW_NOT_ACTIONABLE",
+        `No actionable match found (candidates=${scored.length}, actionable=0)`,
+      );
+    }
+    const best = actionable[0];
     await audit(
       "window_focus_best",
       {
@@ -1891,6 +1930,8 @@ server.registerTool(
         preferredMonitor: preferredMonitor ?? null,
         bestWindowId: best.window.id,
         score: best.score,
+        candidateCount: scored.length,
+        actionableCount: actionable.length,
       },
       dryRun,
     );
@@ -1901,6 +1942,7 @@ server.registerTool(
           focused: false,
           best: { ...best, windowId: best.window.id },
           candidates: scored.slice(0, limit),
+          actionableCandidates: actionable.slice(0, limit),
         },
       };
     }
@@ -1911,6 +1953,7 @@ server.registerTool(
         focused: true,
         best,
         candidates: scored.slice(0, limit),
+        actionableCandidates: actionable.slice(0, limit),
       },
     };
   },
@@ -2012,6 +2055,7 @@ server.registerTool(
     inputSchema: {
       direction: z.enum(["left", "right"]),
       fallback: z.enum(["stay", "wrap"]).default("stay"),
+      createIfAbsent: z.boolean().default(true),
     },
     annotations: {
       readOnlyHint: false,
@@ -2020,8 +2064,17 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ direction, fallback }) => {
-    const [monitors, workspaces, focusedWorkspace] = await Promise.all([listMonitors(), listWorkspaces(), focusedWorkspaceName()]);
+  async ({ direction, fallback, createIfAbsent }) => {
+    const [monitors, workspaces, focusedWorkspace, windows] = await Promise.all([
+      listMonitors(),
+      listWorkspaces(),
+      focusedWorkspaceName(),
+      listWindows({ includeHidden: false }),
+    ]);
+    const occupiedWorkspaceNames = new Set<string>([
+      ...workspaces.map((w) => w.name),
+      ...windows.filter((w) => isNumericWorkspaceName(w.workspace)).map((w) => w.workspace),
+    ]);
     const orderedMonitors = [...monitors].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
     if (orderedMonitors.length === 0) {
       throw new HyprlandError("WINDOW_NOT_FOUND", "No monitors found");
@@ -2037,41 +2090,65 @@ server.registerTool(
         targetMonitorIndex = targetMonitorIndex < 0 ? orderedMonitors.length - 1 : 0;
       } else {
         const currentName = orderedMonitors[focusedMonitorIndex].name;
-        const targetWorkspace =
+        const currentWorkspace =
           focusedWorkspace ??
           workspaces.find((w) => w.monitor === currentName)?.name ??
-          String(orderedMonitors[focusedMonitorIndex].id);
+          pickWorkspaceForMonitor(currentName, workspaces, occupiedWorkspaceNames).name;
+        const payload = {
+          direction,
+          fallback,
+          createIfAbsent,
+          changed: false,
+          workspace: currentWorkspace,
+          monitor: currentName,
+          reason: "edge_no_neighbor",
+          createdWorkspace: false,
+        };
+        await audit("workspace_focus_relative", payload, dryRun);
         if (dryRun) {
           return {
-            content: [{ type: "text", text: `DRY_RUN workspace ${targetWorkspace}` }],
-            structuredContent: { changed: false, workspace: targetWorkspace, monitor: currentName, reason: "edge_no_neighbor" },
+            content: [{ type: "text", text: `DRY_RUN workspace ${currentWorkspace}` }],
+            structuredContent: payload,
           };
         }
-        const out = await hyprctlDispatch("workspace", targetWorkspace);
-        await audit("workspace_focus_relative", { direction, fallback, changed: false, workspace: targetWorkspace, monitor: currentName }, dryRun);
+        const out = await hyprctlDispatch("workspace", currentWorkspace);
         return {
           content: [{ type: "text", text: out || "ok" }],
-          structuredContent: { changed: false, workspace: targetWorkspace, monitor: currentName, reason: "edge_no_neighbor" },
+          structuredContent: payload,
         };
       }
     }
 
     const targetMonitor = orderedMonitors[targetMonitorIndex];
-    const targetWorkspaces = workspaces
-      .filter((w) => w.monitor === targetMonitor.name)
-      .sort((a, b) => a.id - b.id);
-    const targetWorkspace = targetWorkspaces[0]?.name ?? String(targetMonitor.id);
-    await audit("workspace_focus_relative", { direction, fallback, changed: true, workspace: targetWorkspace, monitor: targetMonitor.name }, dryRun);
-    if (dryRun) {
-      return {
-        content: [{ type: "text", text: `DRY_RUN workspace ${targetWorkspace}` }],
-        structuredContent: { changed: true, workspace: targetWorkspace, monitor: targetMonitor.name },
+    let targetWorkspaceInfo = pickWorkspaceForMonitor(targetMonitor.name, workspaces, occupiedWorkspaceNames);
+    if (!createIfAbsent && targetWorkspaceInfo.created) {
+      const currentName = orderedMonitors[focusedMonitorIndex].name;
+      targetWorkspaceInfo = {
+        name: focusedWorkspace ?? workspaces.find((w) => w.monitor === currentName)?.name ?? String(policy.workspace.min),
+        created: false,
       };
     }
-    const out = await hyprctlDispatch("workspace", targetWorkspace);
+    const payload = {
+      direction,
+      fallback,
+      createIfAbsent,
+      changed: true,
+      workspace: targetWorkspaceInfo.name,
+      monitor: targetMonitor.name,
+      reason: targetWorkspaceInfo.created ? "created_absent" : "neighbor_existing",
+      createdWorkspace: targetWorkspaceInfo.created,
+    };
+    await audit("workspace_focus_relative", payload, dryRun);
+    if (dryRun) {
+      return {
+        content: [{ type: "text", text: `DRY_RUN workspace ${targetWorkspaceInfo.name}` }],
+        structuredContent: payload,
+      };
+    }
+    const out = await hyprctlDispatch("workspace", targetWorkspaceInfo.name);
     return {
       content: [{ type: "text", text: out || "ok" }],
-      structuredContent: { changed: true, workspace: targetWorkspace, monitor: targetMonitor.name },
+      structuredContent: payload,
     };
   },
 );

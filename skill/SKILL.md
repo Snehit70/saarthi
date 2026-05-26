@@ -23,7 +23,7 @@ Do not type, send, delete, archive, block, clear, or navigate away unless the cu
 
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
 2. `workspace_topology` when task depends on monitor columns/left-right workspace placement
-3. `workspace_focus_relative` for deterministic left/right column hops
+3. `workspace_focus_relative` for deterministic left/right column hops (`createIfAbsent=true` when a monitor has no workspace)
 4. `window_focus_best` when `window_find` has multiple candidates
 5. `desktop_screenshot_save`
 6. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery

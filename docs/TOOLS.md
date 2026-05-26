@@ -127,11 +127,13 @@ Picks first empty numeric workspace in the given range based on current mapped w
 
 - `direction: "left" | "right"`
 - `fallback?: "stay" | "wrap"` (default `stay`)
+- `createIfAbsent?: boolean` (default `true`)
 
 ### Behavior
 
 Moves focus to a workspace on neighboring monitor by monitor-column order (`x`, then `y`).
 If no neighbor exists, `wrap` jumps to opposite edge monitor; `stay` keeps current monitor workspace.
+When target monitor has no workspace and `createIfAbsent=true`, it creates/switches to first free numeric workspace in policy bounds.
 
 ## `app_launch`
 
@@ -334,6 +336,7 @@ Filters live windows for agent composition flows like:
 ### Behavior
 
 Finds matching windows, ranks candidates, focuses best actionable match, and returns candidate scores.
+Hidden/unmapped top candidates are skipped if lower-ranked actionable matches exist.
 
 ## `desktop_screenshot`
 

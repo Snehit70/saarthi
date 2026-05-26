@@ -101,7 +101,7 @@ async function main(): Promise<void> {
     if (wsTopology.isError) fail("workspace_topology returned error");
     const wsRelative = (await client.callTool({
       name: "workspace_focus_relative",
-      arguments: { direction: "right", fallback: "stay" },
+      arguments: { direction: "right", fallback: "stay", createIfAbsent: true },
     })) as ToolResult;
     if (wsRelative.isError) fail("workspace_focus_relative returned error");
 
