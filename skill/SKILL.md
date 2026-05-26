@@ -1,51 +1,120 @@
-# use-mcp computer-use skill
+---
+name: use-mcp-computer-use
+description: Use when controlling the local Hyprland desktop through the use-mcp server, especially browser, WhatsApp Web, PDF viewer, window/workspace, screenshot, OCR, grid, mouse, and keyboard tasks that require verified real-screen interaction.
+---
 
-Use this skill when a task requires reliable desktop control on Hyprland (especially chat/web-app navigation with OCR + mouse).
+# use-mcp Computer Use
 
-## Primary objective
+Use this skill for real desktop work through the `use-mcp` MCP server. The goal is reliable interaction, not fastest possible clicking.
 
-Execute desktop tasks safely and deterministically with strict state verification between actions.
+## Core Rule
 
-## Mandatory loop (do not skip)
+Every meaningful action must be grounded in the current screen:
 
-1. `workspace_focus` to expected workspace.
-2. `window_find` + `window_focus` to lock target app.
-3. Take baseline screenshot (`desktop_screenshot_save`).
-4. For every UI action:
-   - move (`mouse_move` / `mouse_move_to_text`)
-   - verify state (`desktop_screenshot_save` or OCR check)
-   - click (`mouse_click` / `click_text`)
-   - verify resulting state before next step
-5. Only type/send after right-pane state is explicitly verified.
+1. focus the target window
+2. take or inspect a screenshot
+3. choose a target using grid/OCR/window metadata
+4. move or click
+5. verify the resulting state before the next action
 
-## Hard guardrails
+Do not type, send, delete, archive, block, clear, or navigate away unless the current state proves the target is correct.
 
-- Never chain multiple clicks without verification between them.
-- Never type into a chat/input unless active header/state matches intended target.
-- If modal/context menu appears unexpectedly, recover first (`key_press` with `escape`) and re-verify.
-- Keep send as a separate final action; do not auto-send unless requested.
-- If focus drifts to another window, immediately `window_focus` back before continuing.
+## Preferred Tool Order
 
-## Tooling strategy
+1. `desktop_health`, `window_find`, `window_get`, `window_focus`
+2. `desktop_screenshot_save`
+3. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery
+4. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
+5. `grid_click` or `mouse_click`
+6. `desktop_screenshot_save` or OCR verification
+7. `type_text` / `window_focus_and_type` only after target state is verified
 
-- Prefer explicit coordinates with `target` (`full|monitor|active_window|window`) for repeatable actions.
-- Use OCR tools (`find_text_on_screen`, `resolve_text_point`, `click_text`) as hints, not ground truth.
-- Validate OCR results with geometry:
-  - left-list targets should remain in left pane
-  - header checks should be in top-right pane
-- Use `click_wait_retry` only when expected-state text is clearly detectable.
+Prefer `target: "window"` with a concrete `windowId` over `active_window` for multi-step work. This avoids focus drift.
 
-## Failure taxonomy (report explicitly)
+## Grid Workflow
 
-- `focus_drift`: active window changed mid-loop.
-- `ocr_ambiguous`: text found but not unique/actionable.
-- `wrong_hotspot`: click opened context menu or wrong control.
-- `state_not_changed`: click landed but target pane/header unchanged.
-- `verification_skipped`: action was taken without proof checkpoint.
+Use grid targeting when the UI is visually dense or OCR is ambiguous.
 
-## Minimal run report format
+1. Run `grid_show` on the target window.
+2. Inspect the overlay image path.
+3. Pick the cell center closest to the intended UI element.
+4. Run `grid_cell_to_point` if you need exact coordinates.
+5. Run `grid_move`.
+6. Run `mouse_verify_in_view`.
+7. Run `grid_click`.
+8. Verify with screenshot or OCR.
+9. Run `grid_hide` when the grid session is no longer useful.
 
+Use coarse grid first. If the cell is too large, call `grid_show` again with higher `cols`/`rows` rather than guessing inside a large cell.
+
+## OCR Policy
+
+OCR is a hint, not proof.
+
+- Use OCR to locate candidate text.
+- Verify the match is in the expected region.
+- Avoid acting on text if the same label can appear in multiple places.
+- Prefer partial tokens for discovery (`CODE`, `TEJAS`) but verify final state with stronger anchors (header title, input placeholder, selected row).
+- For non-fullscreen targets, use tools that convert target-relative coordinates internally (`click_text`, `mouse_move_to_text`) or grid tools.
+
+## Browser and WhatsApp Web
+
+Before messaging:
+
+1. focus the browser window with `window_focus`
+2. confirm WhatsApp is loaded with screenshot or OCR
+3. select the chat/group
+4. verify the right-pane header matches the intended chat/group
+5. click the composer
+6. type the message
+7. send only if the user explicitly allowed sending in this turn
+8. verify the message appears and the composer is clear
+
+For WhatsApp chat selection:
+
+- Use left-list grid cells or OCR anchors for the row.
+- Avoid row-right icons for mute/pin/menu.
+- If a context menu opens, press `escape`, verify it closed, and retry with a safer row/title/left-side cell.
+- Do not type into the composer if the right header is wrong.
+
+## Send Policy
+
+Default behavior is prepare-only:
+
+- type message
+- stop before send
+- report screenshot path
+
+Only click send or press Enter when the user explicitly says sending is allowed. After sending, verify with a screenshot that the outgoing message is visible.
+
+## Recovery Rules
+
+- If focus drifts: `window_focus` the known `windowId`, then screenshot.
+- If cursor might be off-target: `mouse_verify_in_view`.
+- If a modal/context menu appears: `key_press` `escape`, then screenshot.
+- If a click does not change state: do not repeat the same point. Use grid/OCR to choose a different target.
+- If URL bar/sidebar search traps input: click page content or use `escape`, then re-focus the address/page target.
+
+## Failure Taxonomy
+
+Use these labels when reporting a blocked action:
+
+- `focus_drift`: target window lost focus
+- `cursor_out_of_view`: pointer outside target bounds
+- `ocr_ambiguous`: text match is not unique or not region-safe
+- `wrong_hotspot`: click opened a menu or wrong control
+- `state_not_changed`: click landed but expected UI did not change
+- `verification_failed`: expected text/header/input state not found
+
+## Run Evidence
+
+For non-trivial tasks, report:
+
+- target window id
 - baseline screenshot path
-- attempted action points/text anchors
-- verification result after each action
-- final state (achieved / blocked) and blocker reason
+- key grid cells or OCR anchors used
+- final verification screenshot path
+- whether the final action was sent/performed or only prepared
+
+Check `logs/actions/run.jsonl` when diagnosing repeated failures.
+
