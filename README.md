@@ -8,6 +8,7 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `desktop_health`
 - `desktop_screenshot`
 - `desktop_screenshot_save`
+- `desktop_screenshot_area`
 - `workspace_list`
 - `workspace_pick_empty`
 - `app_launch`
@@ -29,6 +30,7 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `mouse_verify_in_view`
 - `grid_show`
 - `grid_cell_to_point`
+- `grid_cell_rect`
 - `grid_move`
 - `grid_click`
 - `grid_hide`
@@ -129,6 +131,12 @@ Launch an app into an empty workspace:
    - `appName: "zen"` (or raw `command`)
    - `workspace: "<picked workspace>"`
    - `keepCurrentWorkspace: true`
+
+Grid-to-area screenshot:
+
+1. `grid_show` on target screen/window
+2. `grid_cell_rect` for chosen `cellId`
+3. `desktop_screenshot_area` with returned rectangle
 
 ## Next
 

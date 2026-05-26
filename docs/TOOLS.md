@@ -25,6 +25,7 @@ Operational errors raised by the Hyprland adapter use a stable prefixed format:
 ### Behavior
 
 Returns known app aliases with clear names, one-line descriptions, and best-effort install detection.
+For Flatpak launch forms (`flatpak run <app-id>`), install detection validates app id availability with `flatpak info`.
 
 ### Structured output
 
@@ -32,6 +33,7 @@ Returns known app aliases with clear names, one-line descriptions, and best-effo
   - `name`
   - `description`
   - `installed`
+  - `launchCommand`
   - `launchCommand`
 
 ## `desktop_health`
@@ -327,6 +329,25 @@ Captures PNG exactly like `desktop_screenshot`, then writes file to disk.
 - `height: number`
 - `target: string`
 
+## `desktop_screenshot_area`
+
+### Inputs
+
+- `x: number`
+- `y: number`
+- `width: number`
+- `height: number`
+- `savePath?: string`
+
+### Behavior
+
+Captures absolute rectangular region using `grim -g "<x>,<y> <width>x<height>"`.
+
+### Structured output
+
+- `path: string`
+- `geometry: { x, y, width, height }`
+
 ## `window_focus`
 
 ### Inputs
@@ -450,6 +471,17 @@ Captures screenshot and writes a numbered grid overlay image. Stores active grid
 ### Behavior
 
 Resolves cell id to relative and absolute coordinates using active grid session.
+
+## `grid_cell_rect`
+
+### Inputs
+
+- `cellId: number` (1-based)
+- `insetPx?: number` (default `0`)
+
+### Behavior
+
+Returns absolute rectangle (`x/y/width/height`) for selected grid cell. Use this with `desktop_screenshot_area` for precise area capture.
 
 ## `grid_move`
 

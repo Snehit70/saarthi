@@ -65,6 +65,7 @@ async function main(): Promise<void> {
       "key_press",
       "grid_show",
       "grid_cell_to_point",
+      "grid_cell_rect",
       "grid_move",
       "grid_click",
       "grid_hide",
@@ -78,6 +79,7 @@ async function main(): Promise<void> {
       "mouse_scroll",
       "find_text_on_screen",
       "click_wait_retry",
+      "desktop_screenshot_area",
     ];
 
     for (const name of required) {
@@ -178,6 +180,11 @@ async function main(): Promise<void> {
           arguments: { cellId: 1 },
         })) as ToolResult;
         if (cell.isError) fail("grid_cell_to_point returned error");
+        const cellRect = (await client.callTool({
+          name: "grid_cell_rect",
+          arguments: { cellId: 1, insetPx: 0 },
+        })) as ToolResult;
+        if (cellRect.isError) fail("grid_cell_rect returned error");
 
         const gridMove = (await client.callTool({
           name: "grid_move",
@@ -245,6 +252,12 @@ async function main(): Promise<void> {
         arguments: { target: "full", filenamePrefix: "smoke" },
       })) as ToolResult;
       if (save.isError) fail("desktop_screenshot_save returned error");
+
+      const area = (await client.callTool({
+        name: "desktop_screenshot_area",
+        arguments: { x: 0, y: 0, width: 160, height: 120 },
+      })) as ToolResult;
+      if (area.isError) fail("desktop_screenshot_area returned error");
     }
 
     process.stdout.write(`SMOKE PASS: ${required.length} tools present, health/window calls succeeded, windows=${windows.length}\n`);

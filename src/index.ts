@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -76,13 +76,28 @@ async function commandExists(cmd: string): Promise<boolean> {
   }
 }
 
+async function isLaunchCommandAvailable(command: string): Promise<boolean> {
+  const parsed = parseLaunchCommand(command, policy.launch);
+  if (!(await commandExists(parsed.executable))) return false;
+  if (parsed.executable === "flatpak" && parsed.args[0] === "run" && parsed.args[1]) {
+    try {
+      await execFileAsync("flatpak", ["info", parsed.args[1]]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function resolveAppLaunchCommand(appName: string): Promise<string | null> {
   if (!policy.launch.allowedAppAliases.includes(appName)) return null;
   const app = APP_CATALOG.find((a) => a.name === appName);
   if (!app) return null;
   for (const cmd of app.commands) {
-    const parsed = parseLaunchCommand(cmd, policy.launch);
-    if (await commandExists(parsed.executable)) return parsed.normalized;
+    if (await isLaunchCommandAvailable(cmd)) {
+      return parseLaunchCommand(cmd, policy.launch).normalized;
+    }
   }
   return null;
 }
@@ -583,9 +598,8 @@ server.registerTool(
       APP_CATALOG.filter((app) => policy.launch.allowedAppAliases.includes(app.name)).map(async (app) => {
         let launchCommand: string | null = null;
         for (const cmd of app.commands) {
-          const parsed = parseLaunchCommand(cmd, policy.launch);
-          if (await commandExists(parsed.executable)) {
-            launchCommand = parsed.normalized;
+          if (await isLaunchCommandAvailable(cmd)) {
+            launchCommand = parseLaunchCommand(cmd, policy.launch).normalized;
             break;
           }
         }
@@ -926,6 +940,47 @@ server.registerTool(
     return {
       content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
       structuredContent: payload,
+    };
+  },
+);
+
+server.registerTool(
+  "grid_cell_rect",
+  {
+    title: "Grid Cell Rect",
+    description: "Return absolute rectangle bounds for a grid cell in the active grid session.",
+    inputSchema: {
+      cellId: z.number().int().min(1),
+      insetPx: z.number().int().min(0).max(200).default(0),
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async ({ cellId, insetPx }) => {
+    if (!activeGridSession) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
+    const session = await ensureGridSessionFresh(activeGridSession);
+    const rows = session.rows;
+    const cols = session.cols;
+    const maxCell = rows * cols;
+    if (cellId < 1 || cellId > maxCell) {
+      throw new HyprlandError("NUMERIC_INVALID", `cellId must be within 1..${maxCell}`);
+    }
+    const zero = cellId - 1;
+    const row = Math.floor(zero / cols);
+    const col = zero % cols;
+    const left = Math.round(session.originAbsoluteX + col * session.cellWidth + insetPx);
+    const top = Math.round(session.originAbsoluteY + row * session.cellHeight + insetPx);
+    const width = Math.max(1, Math.round(session.cellWidth - insetPx * 2));
+    const height = Math.max(1, Math.round(session.cellHeight - insetPx * 2));
+    const rect = { x: left, y: top, width, height };
+    await logRunEvent({ action: "grid_cell_rect", cellId, insetPx, rect, sessionId: session.id });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ cellId, rect, sessionId: session.id }, null, 2) }],
+      structuredContent: { cellId, rect, sessionId: session.id },
     };
   },
 );
@@ -1630,6 +1685,45 @@ server.registerTool(
 );
 
 server.registerTool(
+  "desktop_screenshot_area",
+  {
+    title: "Desktop Screenshot Area",
+    description: "Capture screenshot for an explicit absolute area rectangle.",
+    inputSchema: {
+      x: z.number().int().min(-20000).max(20000),
+      y: z.number().int().min(-20000).max(20000),
+      width: z.number().int().min(1).max(20000),
+      height: z.number().int().min(1).max(20000),
+      savePath: z.string().optional(),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ x, y, width, height, savePath }) => {
+    const outPath = savePath ?? join(screenshotDirDefault, `${new Date().toISOString().replace(/[:.]/g, "-")}-area.png`);
+    if (dryRun) {
+      await audit("desktop_screenshot_area", { x, y, width, height, path: outPath }, dryRun);
+      return {
+        content: [{ type: "text", text: `DRY_RUN area screenshot ${x},${y} ${width}x${height} -> ${outPath}` }],
+        structuredContent: { dryRun: true, path: outPath, geometry: { x, y, width, height } },
+      };
+    }
+    await mkdir(dirname(outPath), { recursive: true });
+    const geometry = `${x},${y} ${width}x${height}`;
+    await execFileAsync("grim", ["-g", geometry, outPath]);
+    await audit("desktop_screenshot_area", { x, y, width, height, path: outPath }, dryRun);
+    return {
+      content: [{ type: "text", text: JSON.stringify({ path: outPath, geometry: { x, y, width, height } }, null, 2) }],
+      structuredContent: { path: outPath, geometry: { x, y, width, height } },
+    };
+  },
+);
+
+server.registerTool(
   "window_get",
   {
     title: "Window Get",
@@ -1784,7 +1878,7 @@ server.registerTool(
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
     const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
-    if (!(await commandExists(parsed.executable))) {
+    if (!(await isLaunchCommandAvailable(parsed.normalized))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 
@@ -1934,7 +2028,7 @@ server.registerTool(
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
     const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
-    if (!(await commandExists(parsed.executable))) {
+    if (!(await isLaunchCommandAvailable(parsed.normalized))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 

@@ -25,7 +25,7 @@ export interface PolicyConfig {
 
 const DEFAULT_POLICY: PolicyConfig = {
   launch: {
-    allowedAppAliases: ["zen", "zathura", "kitty", "code", "firefox", "chromium", "nautilus"],
+    allowedAppAliases: ["zen", "firefox", "zathura", "kitty"],
     deniedExecutables: ["sudo", "pkexec", "doas", "su"],
     deniedSubstrings: ["&&", "||", ";", "|", "`", "$(", ">", "<"],
     maxCommandLength: 240,

@@ -24,10 +24,11 @@ Do not type, send, delete, archive, block, clear, or navigate away unless the cu
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
 2. `desktop_screenshot_save`
 3. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery
-4. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
-5. `grid_click` or `mouse_click`
-6. `desktop_screenshot_save` or OCR verification
-7. `type_text` / `window_focus_and_type` only after target state is verified
+4. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
+5. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
+6. `grid_click` or `mouse_click`
+7. `desktop_screenshot_save` or OCR verification
+8. `type_text` / `window_focus_and_type` only after target state is verified
 
 Prefer `target: "window"` with a concrete `windowId` over `active_window` for multi-step work. This avoids focus drift.
 
@@ -38,12 +39,14 @@ Use grid targeting when the UI is visually dense or OCR is ambiguous.
 1. Run `grid_show` on the target window.
 2. Inspect the overlay image path.
 3. Pick the cell center closest to the intended UI element.
-4. Run `grid_cell_to_point` if you need exact coordinates.
-5. Run `grid_move`.
-6. Run `mouse_verify_in_view`.
-7. Run `grid_click`.
-8. Verify with screenshot or OCR.
-9. Run `grid_hide` when the grid session is no longer useful.
+4. Run `grid_cell_rect` if you want exact region bounds and cropped screenshot verification.
+5. Run `desktop_screenshot_area` with that rectangle when region proof matters.
+6. Run `grid_cell_to_point` if you need exact cursor coordinates.
+7. Run `grid_move`.
+8. Run `mouse_verify_in_view`.
+9. Run `grid_click`.
+10. Verify with screenshot or OCR.
+11. Run `grid_hide` when the grid session is no longer useful.
 
 Use coarse grid first. If the cell is too large, call `grid_show` again with higher `cols`/`rows` rather than guessing inside a large cell.
 
@@ -117,4 +120,3 @@ For non-trivial tasks, report:
 - whether the final action was sent/performed or only prepared
 
 Check `logs/actions/run.jsonl` when diagnosing repeated failures.
-
