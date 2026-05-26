@@ -1557,44 +1557,86 @@ server.registerTool(
     },
   },
   async ({ clickText, expectText, target, monitorName, windowId, maxAttempts, waitAfterClickMs, confidenceMin }) => {
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const clickFound = await performFindTextOnScreen({
-        query: clickText,
-        target,
-        monitorName,
-        windowId: windowId as WindowId | undefined,
-        confidenceMin,
-        limit: 1,
-      });
-      const match = clickFound.matches[0];
-      if (!match) {
-        if (attempt === maxAttempts) throw new HyprlandError("ACTION_TIMEOUT", `Could not find click text: ${clickText}`);
+    const startedMs = Date.now();
+    const startedAt = new Date(startedMs).toISOString();
+    let lastAttempt = 0;
+    try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        lastAttempt = attempt;
+        const clickFound = await performFindTextOnScreen({
+          query: clickText,
+          target,
+          monitorName,
+          windowId: windowId as WindowId | undefined,
+          confidenceMin,
+          limit: 1,
+        });
+        const match = clickFound.matches[0];
+        if (!match) {
+          if (attempt === maxAttempts) throw new HyprlandError("ACTION_TIMEOUT", `Could not find click text: ${clickText}`);
+          await sleep(waitAfterClickMs);
+          continue;
+        }
+        const cx = match.x + Math.floor(match.width / 2);
+        const cy = match.y + Math.floor(match.height / 2);
+        const resolved = await resolvePointerCoordinates(cx, cy, target, monitorName, windowId as WindowId | undefined);
+        if (!dryRun) {
+          await performMouseClick(resolved.x, resolved.y, "left", 80);
+        }
         await sleep(waitAfterClickMs);
-        continue;
+        const verifyFound = await performFindTextOnScreen({
+          query: expectText,
+          target,
+          monitorName,
+          windowId: windowId as WindowId | undefined,
+          confidenceMin,
+          limit: 1,
+        });
+        if (verifyFound.matches.length > 0) {
+          await audit(
+            "click_wait_retry",
+            { clickText, expectText, target, attempt, x: resolved.x, y: resolved.y, success: true },
+            dryRun,
+            {
+              startedAt,
+              endedAt: new Date().toISOString(),
+              status: "completed",
+              result: "ok",
+              durationMs: Date.now() - startedMs,
+              attempt,
+            },
+          );
+          return {
+            content: [{ type: "text", text: JSON.stringify({ success: true, attempts: attempt, click: { x: resolved.x, y: resolved.y }, dryRun }, null, 2) }],
+            structuredContent: { success: true, attempts: attempt, click: { x: resolved.x, y: resolved.y }, dryRun },
+          };
+        }
       }
-      const cx = match.x + Math.floor(match.width / 2);
-      const cy = match.y + Math.floor(match.height / 2);
-      const resolved = await resolvePointerCoordinates(cx, cy, target, monitorName, windowId as WindowId | undefined);
-      await performMouseClick(resolved.x, resolved.y, "left", 80);
-      await sleep(waitAfterClickMs);
-      const verifyFound = await performFindTextOnScreen({
-        query: expectText,
-        target,
-        monitorName,
-        windowId: windowId as WindowId | undefined,
-        confidenceMin,
-        limit: 1,
-      });
-      if (verifyFound.matches.length > 0) {
-        await audit("click_wait_retry", { clickText, expectText, target, attempt, x: resolved.x, y: resolved.y, success: true }, dryRun);
-        return {
-          content: [{ type: "text", text: JSON.stringify({ success: true, attempts: attempt, click: { x: resolved.x, y: resolved.y } }, null, 2) }],
-          structuredContent: { success: true, attempts: attempt, click: { x: resolved.x, y: resolved.y } },
-        };
-      }
+      throw new HyprlandError("ACTION_TIMEOUT", `Expected text did not appear: ${expectText}`);
+    } catch (error) {
+      const code = error instanceof HyprlandError ? error.code : "ACTION_TIMEOUT";
+      await audit(
+        "click_wait_retry",
+        {
+          clickText,
+          expectText,
+          target,
+          success: false,
+          errorMessage: formatError(error),
+        },
+        dryRun,
+        {
+          startedAt,
+          endedAt: new Date().toISOString(),
+          status: "error",
+          result: "error",
+          errorCode: code,
+          durationMs: Date.now() - startedMs,
+          attempt: lastAttempt || null,
+        },
+      );
+      throw error;
     }
-    await audit("click_wait_retry", { clickText, expectText, target, success: false }, dryRun);
-    throw new HyprlandError("ACTION_TIMEOUT", `Expected text did not appear: ${expectText}`);
   },
 );
 
