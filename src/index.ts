@@ -1821,6 +1821,68 @@ server.registerTool(
 );
 
 server.registerTool(
+  "workspace_topology",
+  {
+    title: "Workspace Topology",
+    description: "Return monitor layout and workspace-to-monitor topology with left/right neighbors.",
+    inputSchema: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async () => {
+    const [monitors, workspaces, focusedWorkspace] = await Promise.all([listMonitors(), listWorkspaces(), focusedWorkspaceName()]);
+    const orderedMonitors = [...monitors].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
+    const monitorIndexByName = new Map(orderedMonitors.map((m, i) => [m.name, i]));
+
+    const monitorColumns = orderedMonitors.map((m, i) => ({
+      name: m.name,
+      index: i,
+      geometry: { x: m.x, y: m.y, width: m.width, height: m.height },
+      focused: m.focused,
+      leftNeighbor: i > 0 ? orderedMonitors[i - 1].name : null,
+      rightNeighbor: i < orderedMonitors.length - 1 ? orderedMonitors[i + 1].name : null,
+    }));
+
+    const workspaceMap = workspaces
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        monitor: w.monitor,
+        monitorIndex: w.monitor ? (monitorIndexByName.get(w.monitor) ?? null) : null,
+        hasFullscreen: w.hasFullscreen,
+        focused: focusedWorkspace !== null && w.name === focusedWorkspace,
+      }))
+      .sort((a, b) => a.id - b.id);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              focusedWorkspace,
+              monitors: monitorColumns,
+              workspaces: workspaceMap,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+      structuredContent: {
+        focusedWorkspace,
+        monitors: monitorColumns,
+        workspaces: workspaceMap,
+      },
+    };
+  },
+);
+
+server.registerTool(
   "workspace_pick_empty",
   {
     title: "Workspace Pick Empty",

@@ -47,6 +47,7 @@ async function main(): Promise<void> {
       "desktop_screenshot",
       "desktop_screenshot_save",
       "workspace_list",
+      "workspace_topology",
       "workspace_pick_empty",
       "app_launch",
       "window_wait_for",
@@ -94,6 +95,8 @@ async function main(): Promise<void> {
 
     const wsList = (await client.callTool({ name: "workspace_list", arguments: { includeWindowCounts: true } })) as ToolResult;
     if (wsList.isError) fail("workspace_list returned error");
+    const wsTopology = (await client.callTool({ name: "workspace_topology", arguments: {} })) as ToolResult;
+    if (wsTopology.isError) fail("workspace_topology returned error");
 
     const wsPick = (await client.callTool({ name: "workspace_pick_empty", arguments: { rangeStart: 1, rangeEnd: 10 } })) as ToolResult;
     if (wsPick.isError) fail("workspace_pick_empty returned error");

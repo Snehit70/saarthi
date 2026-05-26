@@ -75,6 +75,35 @@ Lists Hyprland workspaces and optional occupancy counts.
   - `windowCount` (when enabled)
   - `isEmpty` (when enabled)
 
+## `workspace_topology`
+
+### Inputs
+
+- none
+
+### Behavior
+
+Returns monitor ordering and workspace mapping for multi-monitor planning.
+Monitors are ordered by global coordinates (`x`, then `y`) and include left/right neighbors.
+
+### Structured output
+
+- `focusedWorkspace: string | null`
+- `monitors[]` with:
+  - `name`
+  - `index`
+  - `geometry`
+  - `focused`
+  - `leftNeighbor`
+  - `rightNeighbor`
+- `workspaces[]` with:
+  - `id`
+  - `name`
+  - `monitor`
+  - `monitorIndex`
+  - `hasFullscreen`
+  - `focused`
+
 ## `workspace_pick_empty`
 
 ### Inputs

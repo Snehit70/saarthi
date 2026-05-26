@@ -10,6 +10,7 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `desktop_screenshot_save`
 - `desktop_screenshot_area`
 - `workspace_list`
+- `workspace_topology`
 - `workspace_pick_empty`
 - `app_launch`
 - `window_wait_for`
