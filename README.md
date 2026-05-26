@@ -80,6 +80,7 @@ Use the repo skill playbook at `skill/SKILL.md` for strict computer-use executio
 - Uses current user session only.
 - Auto-discovers active Hyprland socket under `/run/user/$UID/hypr`.
 - Validates window ids before mutating actions.
+- Enforces launch policy from `config/policy.json` (allowed aliases, denied patterns, rate limit, workspace bounds).
 - Writes mutating call audits to `~/.local/state/saarthi/audit.jsonl`.
 - Writes repo-local action traces to `logs/actions/run.jsonl` for post-run analysis.
 - Dry-run mode:

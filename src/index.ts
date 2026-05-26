@@ -29,6 +29,7 @@ import {
 } from "./lib/hyprland.js";
 import { captureScreenshot } from "./lib/screenshot.js";
 import { cellToRelativePoint as gridCellToRelativePoint, defaultGridForSize } from "./lib/grid.js";
+import { loadPolicyConfig, parseLaunchCommand, resolveWorkspaceRange } from "./lib/policy.js";
 import type { WindowId } from "./lib/types.js";
 
 const dryRun = process.env.USE_MCP_DRY_RUN === "1";
@@ -51,39 +52,39 @@ const APP_CATALOG: AppCatalogEntry[] = [
   { name: "nautilus", description: "File manager for browsing and opening files.", commands: ["nautilus"] },
 ];
 
+const policy = await loadPolicyConfig(process.cwd());
+const launchTimestampsMs: number[] = [];
+
+function assertLaunchRateLimit(): void {
+  const now = Date.now();
+  const windowStart = now - 60_000;
+  while (launchTimestampsMs.length > 0 && launchTimestampsMs[0] < windowStart) {
+    launchTimestampsMs.shift();
+  }
+  if (launchTimestampsMs.length >= policy.launch.maxLaunchesPerMinute) {
+    throw new HyprlandError("APP_LAUNCH_FAILED", `Launch rate limit exceeded (${policy.launch.maxLaunchesPerMinute}/min)`);
+  }
+  launchTimestampsMs.push(now);
+}
+
 async function commandExists(cmd: string): Promise<boolean> {
-  // For compound commands like "flatpak run ...", validate only the executable.
-  const bin = cmd.trim().split(/\s+/)[0];
-  const { stdout } = await execFileAsync("sh", ["-lc", `command -v ${bin} >/dev/null 2>&1 && echo yes || true`]);
-  return String(stdout).trim() === "yes";
+  try {
+    await execFileAsync("which", [cmd]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function resolveAppLaunchCommand(appName: string): Promise<string | null> {
+  if (!policy.launch.allowedAppAliases.includes(appName)) return null;
   const app = APP_CATALOG.find((a) => a.name === appName);
   if (!app) return null;
   for (const cmd of app.commands) {
-    if (await commandExists(cmd)) return cmd;
+    const parsed = parseLaunchCommand(cmd, policy.launch);
+    if (await commandExists(parsed.executable)) return parsed.normalized;
   }
   return null;
-}
-
-function sanitizeLaunchCommand(input: string): string {
-  const cmd = input.trim();
-  if (!cmd) {
-    throw new HyprlandError("APP_LAUNCH_FAILED", "Launch command cannot be empty");
-  }
-  if (cmd.length > 240) {
-    throw new HyprlandError("APP_LAUNCH_FAILED", "Launch command is too long");
-  }
-  // Block shell control characters/operators to reduce command injection risk.
-  if (/[;&|`$><\n\r]/.test(cmd)) {
-    throw new HyprlandError("APP_LAUNCH_FAILED", "Launch command contains unsafe shell characters");
-  }
-  // Block privilege-escalation launch patterns.
-  if (/\b(sudo|pkexec|doas)\b/i.test(cmd)) {
-    throw new HyprlandError("APP_LAUNCH_FAILED", "Privilege escalation commands are not allowed");
-  }
-  return cmd;
 }
 
 function sanitizeTypedText(input: string): string {
@@ -579,11 +580,12 @@ server.registerTool(
   },
   async ({ installedOnly }) => {
     const entries = await Promise.all(
-      APP_CATALOG.map(async (app) => {
+      APP_CATALOG.filter((app) => policy.launch.allowedAppAliases.includes(app.name)).map(async (app) => {
         let launchCommand: string | null = null;
         for (const cmd of app.commands) {
-          if (await commandExists(cmd)) {
-            launchCommand = cmd;
+          const parsed = parseLaunchCommand(cmd, policy.launch);
+          if (await commandExists(parsed.executable)) {
+            launchCommand = parsed.normalized;
             break;
           }
         }
@@ -1760,8 +1762,8 @@ server.registerTool(
       appName: z.string().min(1).max(64).optional(),
       workspace: z.string().optional(),
       preferEmptyWorkspace: z.boolean().default(false),
-      rangeStart: z.number().int().min(1).max(99).default(1),
-      rangeEnd: z.number().int().min(1).max(99).default(10),
+      rangeStart: z.number().int().min(1).max(99).optional(),
+      rangeEnd: z.number().int().min(1).max(99).optional(),
       keepCurrentWorkspace: z.boolean().default(true),
     },
     annotations: {
@@ -1774,31 +1776,36 @@ server.registerTool(
   async ({ command, appName, workspace, preferEmptyWorkspace, rangeStart, rangeEnd, keepCurrentWorkspace }) => {
     const started = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (command && !policy.launch.allowCustomCommand) {
+      throw new HyprlandError("APP_LAUNCH_FAILED", "Custom launch command is disabled by policy");
+    }
     const resolvedCommand = command ?? (appName ? await resolveAppLaunchCommand(appName) : null);
     if (!resolvedCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
-    const safeCommand = sanitizeLaunchCommand(resolvedCommand);
-    if (!(await commandExists(safeCommand))) {
+    const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
+    if (!(await commandExists(parsed.executable))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 
+    const effectiveRange = resolveWorkspaceRange(policy.workspace, rangeStart, rangeEnd);
     let targetWorkspace = workspace;
     if (!targetWorkspace && preferEmptyWorkspace) {
       const windows = await listWindows({ includeHidden: false });
-      targetWorkspace = pickFirstEmptyWorkspace(windows, rangeStart, rangeEnd) ?? undefined;
+      targetWorkspace = pickFirstEmptyWorkspace(windows, effectiveRange.rangeStart, effectiveRange.rangeEnd) ?? undefined;
     }
 
+    assertLaunchRateLimit();
     const originalWorkspace = keepCurrentWorkspace ? await focusedWorkspaceName() : null;
-    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${safeCommand}` : safeCommand;
+    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${parsed.normalized}` : parsed.normalized;
 
     const payload = {
       appName: appName ?? null,
-      command: safeCommand,
+      command: parsed.normalized,
       workspace: targetWorkspace ?? null,
       preferEmptyWorkspace,
-      rangeStart,
-      rangeEnd,
+      rangeStart: effectiveRange.rangeStart,
+      rangeEnd: effectiveRange.rangeEnd,
       keepCurrentWorkspace,
       launchCommand,
     };
@@ -1836,10 +1843,10 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: JSON.stringify({ launched: true, workspace: targetWorkspace ?? null, appName: appName ?? null, command: safeCommand }, null, 2),
+            text: JSON.stringify({ launched: true, workspace: targetWorkspace ?? null, appName: appName ?? null, command: parsed.normalized }, null, 2),
           },
         ],
-        structuredContent: { launched: true, workspace: targetWorkspace ?? null, appName: appName ?? null, command: safeCommand },
+        structuredContent: { launched: true, workspace: targetWorkspace ?? null, appName: appName ?? null, command: parsed.normalized },
       };
     } catch (err) {
       const errorCode = err instanceof HyprlandError ? err.code : "APP_LAUNCH_FAILED";
@@ -1902,8 +1909,8 @@ server.registerTool(
       appName: z.string().min(1).max(64).optional(),
       workspace: z.string().optional(),
       preferEmptyWorkspace: z.boolean().default(false),
-      rangeStart: z.number().int().min(1).max(99).default(1),
-      rangeEnd: z.number().int().min(1).max(99).default(10),
+      rangeStart: z.number().int().min(1).max(99).optional(),
+      rangeEnd: z.number().int().min(1).max(99).optional(),
       keepCurrentWorkspace: z.boolean().default(true),
       classEquals: z.string().optional(),
       classContains: z.string().optional(),
@@ -1919,22 +1926,27 @@ server.registerTool(
     },
   },
   async (args) => {
+    if (args.command && !policy.launch.allowCustomCommand) {
+      throw new HyprlandError("APP_LAUNCH_FAILED", "Custom launch command is disabled by policy");
+    }
     const resolvedCommand = args.command ?? (args.appName ? await resolveAppLaunchCommand(args.appName) : null);
     if (!resolvedCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
-    const safeCommand = sanitizeLaunchCommand(resolvedCommand);
-    if (!(await commandExists(safeCommand))) {
+    const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
+    if (!(await commandExists(parsed.executable))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 
+    const effectiveRange = resolveWorkspaceRange(policy.workspace, args.rangeStart, args.rangeEnd);
     let targetWorkspace = args.workspace;
     if (!targetWorkspace && args.preferEmptyWorkspace) {
       const windows = await listWindows({ includeHidden: false });
-      targetWorkspace = pickFirstEmptyWorkspace(windows, args.rangeStart, args.rangeEnd) ?? undefined;
+      targetWorkspace = pickFirstEmptyWorkspace(windows, effectiveRange.rangeStart, effectiveRange.rangeEnd) ?? undefined;
     }
+    assertLaunchRateLimit();
     const originalWorkspace = args.keepCurrentWorkspace ? await focusedWorkspaceName() : null;
-    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${safeCommand}` : safeCommand;
+    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${parsed.normalized}` : parsed.normalized;
 
     if (!dryRun) {
       await hyprctlDispatch("exec", launchCommand);

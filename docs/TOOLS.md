@@ -105,9 +105,11 @@ Picks first empty numeric workspace in the given range based on current mapped w
 ### Behavior
 
 - Resolves command from `appName` if command is not provided.
+- Applies strict command parsing from `config/policy.json` and rejects blocked patterns/unsafe quoting.
 - Optionally picks an empty workspace automatically.
 - Launches via `hyprctl dispatch exec`.
 - Restores original workspace when `keepCurrentWorkspace` is enabled.
+- Enforces launch rate limit from policy.
 
 ## `window_wait_for`
 

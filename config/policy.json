@@ -1,0 +1,16 @@
+{
+  "launch": {
+    "allowedAppAliases": ["zen", "zathura", "kitty", "code", "firefox", "chromium", "nautilus"],
+    "deniedExecutables": ["sudo", "pkexec", "doas", "su"],
+    "deniedSubstrings": ["&&", "||", ";", "|", "`", "$(", ">", "<"],
+    "maxCommandLength": 240,
+    "maxLaunchesPerMinute": 30,
+    "allowCustomCommand": true
+  },
+  "workspace": {
+    "min": 1,
+    "max": 10,
+    "defaultRangeStart": 1,
+    "defaultRangeEnd": 10
+  }
+}
