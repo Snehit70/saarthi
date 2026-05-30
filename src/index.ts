@@ -11,6 +11,7 @@ import "./handlers/mouse.js";
 import "./handlers/grid.js";
 import "./handlers/text.js";
 import "./handlers/observability.js";
+import "./handlers/observe.js";
 import "./handlers/composite.js";
 
 async function main(): Promise<void> {

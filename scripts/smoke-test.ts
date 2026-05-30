@@ -86,6 +86,9 @@ async function main(): Promise<void> {
       "click_wait_retry",
       "desktop_screenshot_area",
       "action_step",
+      "wait_for_text",
+      "wait_for_stable",
+      "screenshot_compare",
     ];
 
     for (const name of required) {
