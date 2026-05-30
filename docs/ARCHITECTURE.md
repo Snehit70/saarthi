@@ -2,15 +2,20 @@
 
 ## Purpose
 
-`saarthi` is a local MCP server for Hyprland desktop operations with a narrow v1 scope:
+`saarthi` is a local MCP server for Hyprland desktop operations and agentic UI automation. Its surface (44 tools) covers:
 
-- inspect desktop and windows
-- query windows by class/title/focus/workspace
-- capture screenshots
-- focus/move/resize windows
-- move windows across workspaces
+- inspect desktop, windows, and workspace/monitor topology
+- query windows by class/title/focus/workspace and rank/pick best targets
+- capture screenshots (full, monitor, window, area, grid cell)
+- focus/move/resize windows and move them across workspaces
+- launch apps under policy, then wait for and verify the resulting window
+- keyboard typing and key presses
+- mouse move/click/scroll, including grid-based and OCR-text-based targeting
+- on-screen text search (`tesseract` OCR) and text-anchored clicking
+- composite act-and-verify primitives (`action_step`, `click_wait_retry`)
+- telemetry, trace export, and KPI metrics reporting
 
-The server intentionally does **not** expose shell execution, keyboard typing, mouse clicking, clipboard, app launch, or network transport.
+The server intentionally still does **not** expose shell execution, clipboard access, or network/remote transport. Earlier v1 docs described input automation and app launch as out of scope; that is no longer accurate — those capabilities now ship behind policy and audit controls.
 
 ## Runtime Model
 
@@ -30,11 +35,16 @@ The server intentionally does **not** expose shell execution, keyboard typing, m
 
 ## Module Layout
 
-- `src/index.ts`: MCP server and tool registration.
+- `src/index.ts`: MCP server, tool registration, and all tool handlers.
 - `src/lib/hyprland.ts`: Hyprland discovery, JSON query, dispatch execution, normalization.
 - `src/lib/screenshot.ts`: screenshot capture and PNG extraction.
 - `src/lib/image.ts`: PNG metadata parse and monitor/window geometry helpers.
+- `src/lib/grid.ts`: grid overlay cell/point/rect geometry helpers.
+- `src/lib/policy.ts`: launch policy loading, command parsing, alias resolution, rate limiting.
 - `src/lib/audit.ts`: append-only audit logger.
+- `src/lib/runlog.ts`: repo-local action trace log writer.
+- `src/lib/types.ts`: shared type definitions.
+- `config/policy.json`: launch policy config (allowed aliases, denied patterns, rate limit, workspace bounds).
 - `scripts/smoke-test.ts`: stdio smoke validation via MCP client.
 
 ## Hyprland Socket Strategy
@@ -87,10 +97,10 @@ Example chain for a semantic request like "screenshot zathura":
 - `window_find(classContains=\"zathura\", limit=1)` -> get `windowId`
 - `desktop_screenshot(target=\"window\", windowId=<id>)`
 
-## Non-goals (v1)
+## Non-goals
 
 - Multi-compositor support (GNOME/KWin/Sway)
 - Remote/HTTP transport
 - session-user isolation bridge
-- mouse/keyboard automation
-- policy engine beyond static scope limits
+- arbitrary shell execution
+- clipboard access
