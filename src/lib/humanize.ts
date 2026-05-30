@@ -71,6 +71,8 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
     case "mouse_click":
     case "grid_click":
       return "Clicking";
+    case "mouse_drag":
+      return "Dragging";
     case "mouse_move":
     case "grid_move":
       return "Moving cursor";

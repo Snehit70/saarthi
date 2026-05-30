@@ -44,6 +44,7 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `click_text`
 - `mouse_move`
 - `mouse_click`
+- `mouse_drag`
 - `mouse_scroll`
 - `find_text_on_screen`
 - `wait_for_text`

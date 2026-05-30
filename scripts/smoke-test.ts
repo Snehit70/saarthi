@@ -81,6 +81,7 @@ async function main(): Promise<void> {
       "click_text",
       "mouse_move",
       "mouse_click",
+      "mouse_drag",
       "mouse_scroll",
       "find_text_on_screen",
       "click_wait_retry",
