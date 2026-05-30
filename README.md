@@ -87,6 +87,9 @@ pnpm install
 pnpm dev
 ```
 
+MCP is stdio-only and starts per MCP host/client session. Do not run it as a
+shared systemd service.
+
 For mouse primitives (`mouse_move`, `mouse_click`, `mouse_scroll`), ensure `ydotool.service` is active and user-accessible socket is configured.  
 `mouse_move`/`mouse_click` now accept `target` (`full|monitor|active_window|window`) so you can pass relative coordinates directly.
 See `docs/OPERATIONS.md` for exact Fedora override steps.
@@ -104,11 +107,30 @@ on every tool call (disable with `SAARTHI_STATUS=0`); a separate Wayland
 layer-shell process renders it.
 
 ```bash
-overlay/saarthi-overlay          # live
-overlay/saarthi-overlay --demo   # standalone visual demo
+pnpm overlay          # live
+pnpm overlay:demo     # standalone visual demo
+pnpm overlay:install  # install/start the user service
 ```
 
-See `overlay/README.md` for the status contract, requirements, and Hyprland autostart.
+The persistent service starts the overlay at login and keeps it hidden until the
+MCP status feed becomes active:
+
+```bash
+/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+systemctl --user restart saarthi-overlay.service
+systemctl --user status saarthi-overlay.service --no-pager
+journalctl --user -u saarthi-overlay.service -n 100 --no-pager
+```
+
+If an old MCP service exists, remove it:
+
+```bash
+systemctl --user disable --now saarthi-mcp.service || true
+rm -f ~/.config/systemd/user/saarthi-mcp.service
+systemctl --user daemon-reload
+```
+
+See `overlay/README.md` for the status contract and requirements.
 
 ## Safety
 

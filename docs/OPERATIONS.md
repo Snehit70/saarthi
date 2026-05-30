@@ -34,6 +34,43 @@ pnpm build
 pnpm start
 ```
 
+## MCP and overlay model
+
+The MCP server is stdio-only and starts per MCP host/client session. Agents
+should use MCP tools directly after their client starts the server. Do not run
+or restart MCP with systemd.
+
+The eyes overlay HUD is the persistent user service. It watches
+`~/.local/state/saarthi/status.json`, appears while status is `active`, and hides
+after idle. Install/start it with:
+
+```bash
+/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+systemctl --user restart saarthi-overlay.service
+systemctl --user status saarthi-overlay.service --no-pager
+```
+
+Logs:
+
+```bash
+journalctl --user -u saarthi-overlay.service -n 100 --no-pager
+```
+
+If the old invalid MCP service is present, remove it:
+
+```bash
+systemctl --user disable --now saarthi-mcp.service || true
+rm -f ~/.config/systemd/user/saarthi-mcp.service
+systemctl --user daemon-reload
+```
+
+Verify no stale shared MCP daemon remains:
+
+```bash
+systemctl --user status saarthi-mcp.service --no-pager || true
+ps -eo pid,cmd | rg '/home/snehit/projects/saarthi/dist/src/index.js' || true
+```
+
 ## ydotool service setup (required for mouse primitives)
 
 Install:

@@ -7,6 +7,34 @@ description: Use when controlling the local Hyprland desktop through the saarthi
 
 Use this skill for real desktop work through the `saarthi` MCP server. The goal is reliable interaction, not fastest possible clicking.
 
+## Server and Overlay Control
+
+The Saarthi MCP server is stdio-only and belongs to the current MCP host/client
+session. Do not start or restart `saarthi-mcp.service`; if it exists, disable it.
+Use MCP tools directly after the client starts the stdio server.
+
+The eyes overlay HUD is the only persistent user service:
+
+```bash
+systemctl --user restart saarthi-overlay.service
+systemctl --user status saarthi-overlay.service --no-pager
+journalctl --user -u saarthi-overlay.service -n 100 --no-pager
+```
+
+If the overlay service is not installed yet:
+
+```bash
+/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+```
+
+Cleanup for the old invalid MCP service:
+
+```bash
+systemctl --user disable --now saarthi-mcp.service || true
+rm -f ~/.config/systemd/user/saarthi-mcp.service
+systemctl --user daemon-reload
+```
+
 ## Core Rule
 
 Every meaningful action must be grounded in the current screen:

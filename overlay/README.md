@@ -62,21 +62,25 @@ tool results only ever record the text *length*, never the text itself.
 
 ```bash
 # live — follows the status file written by the MCP server
-overlay/saarthi-overlay
+pnpm overlay
 # or: python3 overlay/host.py
 
 # standalone visual demo (no MCP server needed)
-overlay/saarthi-overlay --demo
+pnpm overlay:demo
 ```
 
 Preview the HUD in any browser without GTK: open `index.html?demo=1`.
 
-## Autostart on Hyprland
+## User service
 
-Add to `~/.config/hypr/hyprland.conf`:
+The overlay should be the persistent user service. MCP remains stdio-only and is
+started by each MCP host/client session.
 
-```
-exec-once = python3 /home/snehit/projects/saarthi/overlay/host.py
+```bash
+/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+systemctl --user restart saarthi-overlay.service
+systemctl --user status saarthi-overlay.service --no-pager
+journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ```
 
 ## Tuning
