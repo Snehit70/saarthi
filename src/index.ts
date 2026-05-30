@@ -28,9 +28,24 @@ import {
   pickFirstEmptyWorkspace,
 } from "./lib/hyprland.js";
 import { captureScreenshot } from "./lib/screenshot.js";
-import { cellToRelativePoint as gridCellToRelativePoint, defaultGridForSize } from "./lib/grid.js";
+import { defaultGridForSize } from "./lib/grid.js";
 import { loadPolicyConfig, parseLaunchCommand, resolveWorkspaceRange } from "./lib/policy.js";
 import type { WindowId } from "./lib/types.js";
+import { commandExists, isNumericWorkspaceName, readJsonl, sleep, toNumberOrNull } from "./lib/util.js";
+import { normalizeKey, normalizeModifiers, sanitizeTypedText, toHyprShortcutKey, toHyprShortcutMods } from "./lib/input.js";
+import type { AllowedKey, AllowedModifier } from "./lib/input.js";
+import { parseTesseractTsv } from "./lib/ocr.js";
+import type { TextMatch } from "./lib/ocr.js";
+import { APP_CATALOG, createLaunchRateLimiter, isLaunchCommandAvailable, resolveAppLaunchCommand } from "./lib/apps.js";
+import {
+  cellToRelativePoint,
+  ensureGridSessionFresh,
+  resolvePointerCoordinates,
+  resolveTargetBounds,
+  resolveTargetOrigin,
+  waitForWindow,
+} from "./lib/pointer.js";
+import type { GridSession, PointerTarget, ResolvedPointer, TargetBounds } from "./lib/pointer.js";
 
 const dryRun = process.env.USE_MCP_DRY_RUN === "1";
 const SESSION_ID = process.env.SAARTHI_SESSION_ID ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -40,114 +55,8 @@ const auditLogPath = join(homedir(), ".local", "state", "saarthi", "audit.jsonl"
 const runLogPath = join(process.cwd(), "logs", "actions", "run.jsonl");
 const execFileAsync = promisify(execFile);
 
-interface AppCatalogEntry {
-  name: string;
-  description: string;
-  commands: string[];
-}
-
-const APP_CATALOG: AppCatalogEntry[] = [
-  { name: "zen", description: "Privacy-focused web browser for tabs, web apps, and research.", commands: ["zen-browser", "flatpak run app.zen_browser.zen", "zen"] },
-  { name: "zathura", description: "Keyboard-first PDF/document viewer.", commands: ["zathura"] },
-  { name: "kitty", description: "GPU-accelerated terminal emulator.", commands: ["kitty"] },
-  { name: "code", description: "Visual Studio Code editor and IDE.", commands: ["code"] },
-  { name: "firefox", description: "General-purpose web browser.", commands: ["firefox"] },
-  { name: "chromium", description: "Chromium browser for web testing.", commands: ["chromium", "google-chrome-stable", "google-chrome"] },
-  { name: "nautilus", description: "File manager for browsing and opening files.", commands: ["nautilus"] },
-];
-
 const policy = await loadPolicyConfig(process.cwd());
-const launchTimestampsMs: number[] = [];
-
-function assertLaunchRateLimit(): void {
-  const now = Date.now();
-  const windowStart = now - 60_000;
-  while (launchTimestampsMs.length > 0 && launchTimestampsMs[0] < windowStart) {
-    launchTimestampsMs.shift();
-  }
-  if (launchTimestampsMs.length >= policy.launch.maxLaunchesPerMinute) {
-    throw new HyprlandError("APP_LAUNCH_FAILED", `Launch rate limit exceeded (${policy.launch.maxLaunchesPerMinute}/min)`);
-  }
-  launchTimestampsMs.push(now);
-}
-
-async function commandExists(cmd: string): Promise<boolean> {
-  try {
-    await execFileAsync("which", [cmd]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function isLaunchCommandAvailable(command: string): Promise<boolean> {
-  const parsed = parseLaunchCommand(command, policy.launch);
-  if (!(await commandExists(parsed.executable))) return false;
-  if (parsed.executable === "flatpak" && parsed.args[0] === "run" && parsed.args[1]) {
-    try {
-      await execFileAsync("flatpak", ["info", parsed.args[1]]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return true;
-}
-
-async function resolveAppLaunchCommand(appName: string): Promise<string | null> {
-  if (!policy.launch.allowedAppAliases.includes(appName)) return null;
-  const app = APP_CATALOG.find((a) => a.name === appName);
-  if (!app) return null;
-  for (const cmd of app.commands) {
-    if (await isLaunchCommandAvailable(cmd)) {
-      return parseLaunchCommand(cmd, policy.launch).normalized;
-    }
-  }
-  return null;
-}
-
-function sanitizeTypedText(input: string): string {
-  if (input.length === 0) {
-    throw new HyprlandError("INPUT_FAILED", "Typed text cannot be empty");
-  }
-  if (input.length > 4000) {
-    throw new HyprlandError("INPUT_FAILED", "Typed text is too long");
-  }
-  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(input)) {
-    throw new HyprlandError("INPUT_FAILED", "Typed text contains unsupported control characters");
-  }
-  return input;
-}
-
-function toNumberOrNull(value: string | null): number | null {
-  if (value === null) return null;
-  if (!/^-?\d+$/.test(value.trim())) return null;
-  return Number(value);
-}
-
-async function readJsonl(path: string): Promise<Array<Record<string, unknown>>> {
-  try {
-    const text = await readFile(path, "utf8");
-    return text
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => {
-        try {
-          return JSON.parse(line) as Record<string, unknown>;
-        } catch {
-          return null;
-        }
-      })
-      .filter((x): x is Record<string, unknown> => x !== null);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
-}
-
-function isNumericWorkspaceName(name: string): boolean {
-  return /^\d+$/.test(name.trim());
-}
+const assertLaunchRateLimit = createLaunchRateLimiter(policy.launch.maxLaunchesPerMinute);
 
 function pickWorkspaceForMonitor(
   monitorName: string,
@@ -168,357 +77,6 @@ function pickWorkspaceForMonitor(
 
   // All numeric workspace slots are occupied; caller should avoid claiming creation.
   return { name: String(policy.workspace.min), created: false, exhausted: true };
-}
-
-const ALLOWED_KEYS = [
-  "enter",
-  "tab",
-  "escape",
-  "backspace",
-  "delete",
-  "left",
-  "right",
-  "up",
-  "down",
-  "home",
-  "end",
-  "page_up",
-  "page_down",
-  "f5",
-] as const;
-
-const ALLOWED_MODIFIERS = ["ctrl", "alt", "shift", "super"] as const;
-
-type AllowedKey = (typeof ALLOWED_KEYS)[number];
-type AllowedModifier = (typeof ALLOWED_MODIFIERS)[number];
-
-function normalizeKey(key: string): AllowedKey {
-  const normalized = key.trim().toLowerCase().replace(/\s+/g, "_");
-  if ((ALLOWED_KEYS as readonly string[]).includes(normalized)) {
-    return normalized as AllowedKey;
-  }
-  if (/^[a-z0-9]$/.test(normalized)) {
-    return normalized as AllowedKey;
-  }
-  throw new HyprlandError("INPUT_FAILED", `Unsupported key: ${key}`);
-}
-
-function normalizeModifiers(modifiers: string[]): AllowedModifier[] {
-  const out: AllowedModifier[] = [];
-  for (const mod of modifiers) {
-    const normalized = mod.trim().toLowerCase();
-    if (!(ALLOWED_MODIFIERS as readonly string[]).includes(normalized)) {
-      throw new HyprlandError("INPUT_FAILED", `Unsupported modifier: ${mod}`);
-    }
-    if (!out.includes(normalized as AllowedModifier)) out.push(normalized as AllowedModifier);
-  }
-  return out;
-}
-
-function toHyprShortcutMods(mods: AllowedModifier[]): string {
-  const map: Record<AllowedModifier, string> = { ctrl: "CTRL", alt: "ALT", shift: "SHIFT", super: "SUPER" };
-  return mods.map((m) => map[m]).join(" ");
-}
-
-function toHyprShortcutKey(key: AllowedKey): string {
-  const map: Record<AllowedKey, string> = {
-    enter: "RETURN",
-    tab: "TAB",
-    escape: "ESCAPE",
-    backspace: "BACKSPACE",
-    delete: "DELETE",
-    left: "LEFT",
-    right: "RIGHT",
-    up: "UP",
-    down: "DOWN",
-    home: "HOME",
-    end: "END",
-    page_up: "PAGEUP",
-    page_down: "PAGEDOWN",
-    f5: "F5",
-  };
-  if (map[key]) return map[key];
-  // Letter/digit keys for extension-driven keyboard navigation (for example Vimium hints).
-  if (/^[a-z0-9]$/.test(key)) return key.toUpperCase();
-  throw new HyprlandError("INPUT_FAILED", `Unsupported shortcut key: ${key}`);
-}
-
-interface TextMatch {
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  confidence: number;
-}
-
-function parseTesseractTsv(tsv: string): TextMatch[] {
-  const lines = tsv.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const out: TextMatch[] = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const cols = lines[i].split("\t");
-    if (cols.length < 12) continue;
-    const conf = Number(cols[10]);
-    const text = cols[11]?.trim() ?? "";
-    if (!text || !Number.isFinite(conf)) continue;
-    out.push({
-      text,
-      x: Number(cols[6]),
-      y: Number(cols[7]),
-      width: Number(cols[8]),
-      height: Number(cols[9]),
-      confidence: conf,
-    });
-  }
-  return out;
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-type PointerTarget = "full" | "monitor" | "active_window" | "window";
-
-interface ResolvedPointer {
-  x: number;
-  y: number;
-  target: PointerTarget;
-  monitorName: string | null;
-  windowId: WindowId | null;
-}
-
-interface GridSession {
-  id: string;
-  createdAt: string;
-  target: PointerTarget;
-  monitorName: string | null;
-  windowId: WindowId | null;
-  sourcePath: string;
-  gridPath: string;
-  width: number;
-  height: number;
-  cols: number;
-  rows: number;
-  cellWidth: number;
-  cellHeight: number;
-  originAbsoluteX: number;
-  originAbsoluteY: number;
-}
-
-let activeGridSession: GridSession | null = null;
-
-function cellToRelativePoint(session: GridSession, cellId: number): { x: number; y: number; row: number; col: number } {
-  return gridCellToRelativePoint(session.cols, session.rows, session.width, session.height, cellId);
-}
-
-async function resolveTargetOrigin(
-  target: PointerTarget,
-  monitorName?: string,
-  windowId?: WindowId,
-): Promise<{ originX: number; originY: number; resolvedMonitorName: string | null; resolvedWindowId: WindowId | null }> {
-  if (target === "full") {
-    return { originX: 0, originY: 0, resolvedMonitorName: null, resolvedWindowId: null };
-  }
-  if (target === "monitor") {
-    const monitors = await listMonitors();
-    const mon = monitorName ? monitors.find((m) => m.name === monitorName) : monitors.find((m) => m.focused);
-    if (!mon) throw new HyprlandError("WINDOW_NOT_FOUND", monitorName ? `Monitor not found: ${monitorName}` : "Focused monitor not found");
-    return { originX: mon.x, originY: mon.y, resolvedMonitorName: mon.name, resolvedWindowId: null };
-  }
-  if (target === "active_window") {
-    const win = await activeWindow();
-    if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available for target 'active_window'");
-    return { originX: win.position.x, originY: win.position.y, resolvedMonitorName: null, resolvedWindowId: win.id };
-  }
-  if (!windowId) throw new HyprlandError("WINDOW_NOT_FOUND", "windowId is required when target is 'window'");
-  const win = await getWindowOrThrow(windowId);
-  return { originX: win.position.x, originY: win.position.y, resolvedMonitorName: null, resolvedWindowId: win.id };
-}
-
-interface TargetBounds {
-  originX: number;
-  originY: number;
-  width: number;
-  height: number;
-  resolvedTarget: string;
-}
-
-async function resolveTargetBounds(
-  target: PointerTarget,
-  monitorName?: string,
-  windowId?: WindowId,
-): Promise<TargetBounds> {
-  const monitors = await listMonitors();
-  if (target === "full") {
-    if (monitors.length === 0) throw new HyprlandError("WINDOW_NOT_FOUND", "No monitors found");
-    const minX = Math.min(...monitors.map((m) => m.x));
-    const minY = Math.min(...monitors.map((m) => m.y));
-    const maxX = Math.max(...monitors.map((m) => m.x + m.width));
-    const maxY = Math.max(...monitors.map((m) => m.y + m.height));
-    return { originX: minX, originY: minY, width: maxX - minX, height: maxY - minY, resolvedTarget: "full" };
-  }
-  if (target === "monitor") {
-    const mon = monitorName ? monitors.find((m) => m.name === monitorName) : monitors.find((m) => m.focused);
-    if (!mon) throw new HyprlandError("WINDOW_NOT_FOUND", monitorName ? `Monitor not found: ${monitorName}` : "Focused monitor not found");
-    return { originX: mon.x, originY: mon.y, width: mon.width, height: mon.height, resolvedTarget: `monitor:${mon.name}` };
-  }
-  if (target === "active_window") {
-    const win = await activeWindow();
-    if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
-    return {
-      originX: win.position.x,
-      originY: win.position.y,
-      width: win.size.width,
-      height: win.size.height,
-      resolvedTarget: `window:${win.id}`,
-    };
-  }
-  if (!windowId) throw new HyprlandError("WINDOW_NOT_FOUND", "windowId is required when target is 'window'");
-  const win = await getWindowOrThrow(windowId);
-  return {
-    originX: win.position.x,
-    originY: win.position.y,
-    width: win.size.width,
-    height: win.size.height,
-    resolvedTarget: `window:${win.id}`,
-  };
-}
-
-async function ensureGridSessionFresh(session: GridSession): Promise<GridSession> {
-  if (session.target === "window") {
-    if (!session.windowId) throw new HyprlandError("WINDOW_NOT_FOUND", "Grid session window target missing windowId");
-    const win = await getWindowOrThrow(session.windowId);
-    return {
-      ...session,
-      originAbsoluteX: win.position.x,
-      originAbsoluteY: win.position.y,
-      width: win.size.width,
-      height: win.size.height,
-      cellWidth: win.size.width / session.cols,
-      cellHeight: win.size.height / session.rows,
-      windowId: win.id,
-    };
-  }
-  if (session.target === "active_window") {
-    const win = await activeWindow();
-    if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window for active_window grid session");
-    if (session.windowId && session.windowId !== win.id) {
-      throw new HyprlandError("WINDOW_NOT_ACTIONABLE", `Active window changed during grid session (expected ${session.windowId}, got ${win.id})`);
-    }
-    return {
-      ...session,
-      originAbsoluteX: win.position.x,
-      originAbsoluteY: win.position.y,
-      width: win.size.width,
-      height: win.size.height,
-      cellWidth: win.size.width / session.cols,
-      cellHeight: win.size.height / session.rows,
-      windowId: win.id,
-    };
-  }
-  if (session.target === "monitor") {
-    const monitors = await listMonitors();
-    const mon = session.monitorName ? monitors.find((m) => m.name === session.monitorName) : monitors.find((m) => m.focused);
-    if (!mon) throw new HyprlandError("WINDOW_NOT_FOUND", session.monitorName ? `Monitor not found: ${session.monitorName}` : "Focused monitor not found");
-    return {
-      ...session,
-      originAbsoluteX: mon.x,
-      originAbsoluteY: mon.y,
-      width: mon.width,
-      height: mon.height,
-      cellWidth: mon.width / session.cols,
-      cellHeight: mon.height / session.rows,
-      monitorName: mon.name,
-    };
-  }
-  const bounds = await resolveTargetBounds("full");
-  return {
-    ...session,
-    originAbsoluteX: bounds.originX,
-    originAbsoluteY: bounds.originY,
-    width: bounds.width,
-    height: bounds.height,
-    cellWidth: bounds.width / session.cols,
-    cellHeight: bounds.height / session.rows,
-  };
-}
-
-async function resolvePointerCoordinates(
-  x: number,
-  y: number,
-  target: PointerTarget,
-  monitorName?: string,
-  windowId?: WindowId,
-): Promise<ResolvedPointer> {
-  if (target === "full") {
-    return { x, y, target, monitorName: null, windowId: null };
-  }
-
-  if (target === "window") {
-    if (!windowId) {
-      throw new HyprlandError("WINDOW_NOT_FOUND", "windowId is required when target is 'window'");
-    }
-    const win = await getWindowOrThrow(windowId);
-    return {
-      x: win.position.x + x,
-      y: win.position.y + y,
-      target,
-      monitorName: null,
-      windowId: win.id,
-    };
-  }
-
-  if (target === "active_window") {
-    const win = await activeWindow();
-    if (!win) {
-      throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available for target 'active_window'");
-    }
-    return {
-      x: win.position.x + x,
-      y: win.position.y + y,
-      target,
-      monitorName: null,
-      windowId: win.id,
-    };
-  }
-
-  const monitors = await listMonitors();
-  const mon = monitorName ? monitors.find((m) => m.name === monitorName) : monitors.find((m) => m.focused);
-  if (!mon) {
-    throw new HyprlandError("WINDOW_NOT_FOUND", monitorName ? `Monitor not found: ${monitorName}` : "Focused monitor not found");
-  }
-  return {
-    x: mon.x + x,
-    y: mon.y + y,
-    target,
-    monitorName: mon.name,
-    windowId: null,
-  };
-}
-
-async function waitForWindow(
-  query: {
-    classEquals?: string;
-    classContains?: string;
-    titleContains?: string;
-    workspace?: string;
-    focusedOnly?: boolean;
-    includeHidden?: boolean;
-  },
-  timeoutMs: number,
-  pollMs: number,
-): Promise<{ found: Awaited<ReturnType<typeof listWindows>>[number] | null; attempts: number }> {
-  const started = Date.now();
-  let attempts = 0;
-  while (Date.now() - started <= timeoutMs) {
-    attempts += 1;
-    const windows = await listWindows({ workspace: query.workspace, includeHidden: query.includeHidden ?? false });
-    const matches = filterWindowsByQuery(windows, query);
-    if (matches.length > 0) {
-      return { found: matches[0], attempts };
-    }
-    await sleep(pollMs);
-  }
-  return { found: null, attempts };
 }
 
 async function performMouseClick(x: number, y: number, button: "left" | "middle" | "right", settleMs: number): Promise<void> {
@@ -628,6 +186,8 @@ async function resolveTextClickPoint(input: {
   };
 }
 
+let activeGridSession: GridSession | null = null;
+
 const server = new McpServer({
   name: "saarthi",
   version: "0.1.0",
@@ -653,7 +213,7 @@ server.registerTool(
       APP_CATALOG.filter((app) => policy.launch.allowedAppAliases.includes(app.name)).map(async (app) => {
         let launchCommand: string | null = null;
         for (const cmd of app.commands) {
-          if (await isLaunchCommandAvailable(cmd)) {
+          if (await isLaunchCommandAvailable(cmd, policy.launch)) {
             launchCommand = parseLaunchCommand(cmd, policy.launch).normalized;
             break;
           }
@@ -2694,12 +2254,12 @@ server.registerTool(
     if (command && !policy.launch.allowCustomCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Custom launch command is disabled by policy");
     }
-    const resolvedCommand = command ?? (appName ? await resolveAppLaunchCommand(appName) : null);
+    const resolvedCommand = command ?? (appName ? await resolveAppLaunchCommand(appName, policy.launch) : null);
     if (!resolvedCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
     const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
-    if (!(await isLaunchCommandAvailable(parsed.normalized))) {
+    if (!(await isLaunchCommandAvailable(parsed.normalized, policy.launch))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 
@@ -2846,12 +2406,12 @@ server.registerTool(
     if (args.command && !policy.launch.allowCustomCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Custom launch command is disabled by policy");
     }
-    const resolvedCommand = args.command ?? (args.appName ? await resolveAppLaunchCommand(args.appName) : null);
+    const resolvedCommand = args.command ?? (args.appName ? await resolveAppLaunchCommand(args.appName, policy.launch) : null);
     if (!resolvedCommand) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "No launch command available. Provide command or a valid installed appName.");
     }
     const parsed = parseLaunchCommand(resolvedCommand, policy.launch);
-    if (!(await isLaunchCommandAvailable(parsed.normalized))) {
+    if (!(await isLaunchCommandAvailable(parsed.normalized, policy.launch))) {
       throw new HyprlandError("APP_LAUNCH_FAILED", "Launch executable not found in PATH");
     }
 
