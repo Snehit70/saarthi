@@ -26,6 +26,7 @@ server.registerTool(
     inputSchema: {
       text: z.string().min(1).max(4000),
       delayMs: z.number().int().min(0).max(1000).default(0),
+      sensitive: z.boolean().default(false).describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
     },
     annotations: {
       readOnlyHint: false,
@@ -72,6 +73,7 @@ server.registerTool(
       text: z.string().min(1).max(4000),
       focusSettleMs: z.number().int().min(0).max(3000).default(120),
       delayMs: z.number().int().min(0).max(1000).default(0),
+      sensitive: z.boolean().default(false).describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
     },
     annotations: {
       readOnlyHint: false,

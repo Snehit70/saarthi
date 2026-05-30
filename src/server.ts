@@ -7,6 +7,10 @@ export const server = new McpServer({
   version: "0.1.0",
 });
 
+// Privacy: when set, typed text is masked in the status feed for every call
+// (individual calls can also opt in via a `sensitive` argument).
+const REDACT_TYPED = process.env.SAARTHI_REDACT_TYPED === "1";
+
 // Instrument every tool registration with a status feed for the overlay HUD.
 // One wrapper here covers all handler modules; emission is best-effort and never
 // alters the tool result or error. registerTool is heavily overloaded in the
@@ -17,7 +21,7 @@ const originalRegisterTool = server.registerTool.bind(server);
 server.registerTool = ((name: string, config: any, handler: (...handlerArgs: any[]) => any) => {
   const kind = config?.annotations?.readOnlyHint === true ? "read" : "act";
   const wrapped = async (...handlerArgs: any[]) => {
-    const id = emitActive(name, kind, humanizeAction(name, handlerArgs[0]));
+    const id = emitActive(name, kind, humanizeAction(name, handlerArgs[0], { redactText: REDACT_TYPED }));
     try {
       const result = await handler(...handlerArgs);
       emitDone(id, true);

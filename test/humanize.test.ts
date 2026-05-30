@@ -37,4 +37,15 @@ describe("humanizeAction", () => {
     expect(humanizeAction("type_text", undefined)).toBe("Typing");
     expect(humanizeAction("window_focus", null)).toBe("Focusing window");
   });
+
+  it("masks typed text when the call is marked sensitive", () => {
+    expect(humanizeAction("type_text", { text: "hunter2", sensitive: true })).toBe("Typing (hidden)");
+    expect(humanizeAction("window_focus_and_type", { text: "secret", sensitive: true })).toBe("Typing (hidden)");
+  });
+
+  it("masks typed text when global redaction is requested", () => {
+    expect(humanizeAction("type_text", { text: "hunter2" }, { redactText: true })).toBe("Typing (hidden)");
+    // non-typing tools are unaffected by redaction
+    expect(humanizeAction("click_text", { query: "Submit" }, { redactText: true })).toBe('Clicking "Submit"');
+  });
 });

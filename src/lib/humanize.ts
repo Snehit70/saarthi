@@ -11,12 +11,19 @@ function quote(s: string, max = 40): string {
   return `"${t}"`;
 }
 
-export function humanizeAction(tool: string, rawArgs: unknown): string {
+export interface HumanizeOptions {
+  /** Mask typed text in the label (privacy). Combined with a per-call `sensitive` arg. */
+  redactText?: boolean;
+}
+
+export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOptions = {}): string {
   const args = (rawArgs && typeof rawArgs === "object" ? rawArgs : {}) as Record<string, unknown>;
+  const redact = opts.redactText === true || args.sensitive === true;
 
   switch (tool) {
     case "type_text":
     case "window_focus_and_type": {
+      if (redact) return "Typing (hidden)";
       const text = str(args, "text");
       return text ? `Typing ${quote(text)}` : "Typing";
     }

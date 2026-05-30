@@ -47,6 +47,11 @@ step `state` is `"running" | "done" | "error"`.
 
 The server stops emitting if `SAARTHI_STATUS=0` is set.
 
+**Privacy:** typed text is shown in the feed (`Typing "…"`). Mask it per call
+with the `sensitive: true` argument on `type_text` / `window_focus_and_type`, or
+globally with `SAARTHI_REDACT_TYPED=1` (renders `Typing (hidden)`). Audit logs and
+tool results only ever record the text *length*, never the text itself.
+
 ## Requirements (Fedora + Hyprland — all preinstalled here)
 
 - `python3` + PyGObject (`python3-gobject`)
