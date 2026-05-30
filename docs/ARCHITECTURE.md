@@ -38,12 +38,14 @@ The server intentionally still does **not** expose shell execution, clipboard ac
 Entry and shared runtime:
 
 - `src/index.ts`: thin entry — imports the handler modules (which register tools on import) and connects the stdio transport.
-- `src/server.ts`: the single `McpServer` instance, imported by every handler module.
+- `src/server.ts`: the single `McpServer` instance. It also wraps `registerTool` once to emit a live status feed (active/idle + read/act kind) for the overlay HUD; emission is best-effort and never alters tool results.
 - `src/runtime.ts`: shared runtime state/config singletons (dry-run flag, session id, log paths, loaded policy, launch rate limiter, and the mutable grid-session holder).
 
 Tool handlers (one module per domain, each registers its tools on import):
 
 - `src/handlers/apps.ts`, `windows.ts`, `workspaces.ts`, `screenshots.ts`, `input.ts`, `mouse.ts`, `grid.ts`, `text.ts`, `observability.ts`, `composite.ts`.
+- `src/handlers/observe.ts`: `wait_for_text`, `wait_for_stable`, `screenshot_compare` (reliability / verification).
+- `src/handlers/perception.ts`: `ui_find`, `ui_tree` (accessibility-tree introspection).
 
 Adapters and helpers (`src/lib/`):
 
@@ -52,9 +54,13 @@ Adapters and helpers (`src/lib/`):
 - `image.ts`: PNG metadata parse and monitor/window geometry helpers.
 - `grid.ts`: grid overlay cell/point/rect geometry helpers.
 - `pointer.ts`: pointer/grid target resolution and window-wait helpers.
-- `mouse.ts`: mouse move/click/scroll execution via `ydotool`/`hyprctl`.
+- `mouse.ts`: mouse move/click/scroll/drag and eased movement via `ydotool`/`hyprctl`.
 - `text-locate.ts`: OCR-based on-screen text search and click-point resolution.
 - `ocr.ts`: tesseract TSV parsing.
+- `atspi.ts`: runs the AT-SPI query helper and parses its JSON (perception).
+- `diff.ts`: image diffing via `magick compare` (normalised RMSE).
+- `status.ts`: best-effort status feed written to `status.json` for the overlay HUD.
+- `humanize.ts`: tool name + args -> human-readable status labels (with secret redaction).
 - `input.ts`: keyboard key/modifier normalization and typed-text sanitization.
 - `apps.ts`: app catalog, launch-command resolution, and launch rate limiter.
 - `workspace.ts`: empty-workspace selection within policy bounds.
@@ -68,6 +74,8 @@ Other:
 
 - `config/policy.json`: launch policy config (allowed aliases, denied patterns, rate limit, workspace bounds).
 - `scripts/smoke-test.ts`: stdio smoke validation via MCP client.
+- `scripts/atspi_query.py`: AT-SPI accessibility-tree walker (PyGObject) emitting JSON; invoked by `lib/atspi.ts`.
+- `overlay/`: optional desktop HUD (web UI + Python `gtk-layer-shell`/WebKit host) that renders the status feed. See `overlay/README.md`.
 
 ## Hyprland Socket Strategy
 

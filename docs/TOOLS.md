@@ -274,6 +274,7 @@ Verifies current window state against expected values and returns mismatch detai
 
 - `text: string`
 - `delayMs?: number` (default `0`)
+- `sensitive?: boolean` (default `false`) — masks the text in the status overlay/feed (`Typing (hidden)`); use for passwords. Audit logs and results only ever store text length.
 
 ### Behavior
 
@@ -287,6 +288,7 @@ Types text into the currently focused input field using Wayland virtual keyboard
 - `text`
 - `focusSettleMs?: number` (default `120`)
 - `delayMs?: number` (default `0`)
+- `sensitive?: boolean` (default `false`) — see `type_text`.
 
 ### Behavior
 
@@ -695,10 +697,11 @@ Resolves text point and clicks there.
 - `windowId?: string` (required when `target="window"`)
 - `button?: "left" | "middle" | "right"` (default `left`)
 - `settleMs?: number` (default `80`)
+- `clickCount?: number` (`1..3`, default `1`) — single/double/triple click.
 
 ### Behavior
 
-Converts `(x,y)` to absolute screen coordinates from the selected target, moves via Hyprland cursor dispatch, then clicks with `ydotool`.
+Converts `(x,y)` to absolute screen coordinates from the selected target, moves via Hyprland cursor dispatch, then clicks with `ydotool` (`clickCount` times, ~45ms apart).
 
 ## `mouse_move`
 
@@ -710,10 +713,31 @@ Converts `(x,y)` to absolute screen coordinates from the selected target, moves 
 - `monitorName?: string` (used when `target="monitor"`, defaults to focused monitor)
 - `windowId?: string` (required when `target="window"`)
 - `settleMs?: number` (default `40`)
+- `smooth?: boolean` (default `false`) — glide along an eased path from the current cursor position so hover/motion-driven UIs fire.
+- `steps?: number` (`2..200`, default `24`) — used when `smooth`.
+- `stepDelayMs?: number` (`0..100`, default `8`) — used when `smooth`.
 
 ### Behavior
 
-Converts `(x,y)` to absolute screen coordinates from the selected target, then moves cursor using Hyprland `dispatch movecursor`.
+Converts `(x,y)` to absolute screen coordinates from the selected target, then moves cursor using Hyprland `dispatch movecursor` (instant, or eased when `smooth`).
+
+## `mouse_drag`
+
+### Inputs
+
+- `fromX: number`, `fromY: number`
+- `toX: number`, `toY: number`
+- `target?: "full" | "monitor" | "active_window" | "window"` (default `full`) — both endpoints are relative to the same target
+- `monitorName?: string`
+- `windowId?: string`
+- `button?: "left" | "middle" | "right"` (default `left`)
+- `steps?: number` (`2..200`, default `28`)
+- `stepDelayMs?: number` (`0..100`, default `8`)
+- `settleMs?: number` (default `80`)
+
+### Behavior
+
+Presses the button at the start point, drags along an eased path to the end point, then releases (sliders, selections, drag-and-drop). Uses `ydotool` button down/up codes around Hyprland `movecursor` steps.
 
 ## `mouse_scroll`
 
@@ -799,3 +823,97 @@ Atomic loop:
 - `afterPath`
 - `action` summary
 - `verification` summary
+
+## `wait_for_text`
+
+### Inputs
+
+- `query: string`
+- `target?: "full" | "monitor" | "active_window" | "window"` (default `full`)
+- `monitorName?: string`, `windowId?: string`
+- `mode?: "appear" | "disappear"` (default `appear`)
+- `timeoutMs?: number` (`200..60000`, default `8000`)
+- `pollMs?: number` (`100..5000`, default `400`)
+- `confidenceMin?: number` (default `55`)
+
+### Behavior
+
+Polls the screen with OCR until `query` appears (or disappears), or the timeout elapses. Use to wait on page loads / dialogs before acting.
+
+### Structured output
+
+- `ok: boolean` (condition met before timeout)
+- `mode`, `query`, `attempts`, `elapsedMs`
+- `match`: `{ relativeX, relativeY, absoluteX, absoluteY }` on `appear`, else `null`
+
+## `wait_for_stable`
+
+### Inputs
+
+- `target?: "full" | "monitor" | "active_window" | "window"` (default `active_window`)
+- `monitorName?: string`, `windowId?: string`
+- `timeoutMs?: number` (`200..60000`, default `8000`)
+- `pollMs?: number` (`100..5000`, default `350`)
+- `threshold?: number` (`0..1`, default `0.01`) — normalised diff at/under which two frames count as "same"
+- `stableFrames?: number` (`2..10`, default `2`) — consecutive same frames required
+
+### Behavior
+
+Captures the target repeatedly and compares consecutive frames (`magick compare` RMSE) until it stops changing for `stableFrames`, or the timeout elapses. Use for settle detection before acting on an animating/loading UI.
+
+### Structured output
+
+- `stable: boolean`, `frames`, `elapsedMs`, `lastDiff`, `threshold`
+
+## `screenshot_compare`
+
+### Inputs
+
+- `pathA?: string`, `pathB?: string` — compare two existing PNGs, **or**
+- `baselinePath?: string` + capture target (`target`, `monitorName`, `windowId`) — compare a baseline against a fresh capture
+- `threshold?: number` (`0..1`, default `0.02`)
+- `saveDiffPath?: string` — optional visual diff image
+
+### Behavior
+
+Returns a normalised difference score (`magick compare` RMSE) between two images. Pairs with `action_step` to confirm a change actually happened.
+
+### Structured output
+
+- `changed: boolean` (diff > threshold), `diffScore` (normalised), `raw`, `threshold`, `diffPath`
+
+## `ui_find`
+
+### Inputs
+
+- `nameContains?: string` — case-insensitive substring on the accessible name
+- `role?: string` — exact AT-SPI role (e.g. `push button`, `entry`, `link`)
+- `interactive?: boolean` (default `true`) — restrict to interactive roles
+- `focused?: boolean` (default `true`) — limit to the focused app (pid resolved via the active window)
+- `appName?: string`, `pid?: number` — override the focused-app scope
+- `includeOffscreen?: boolean` (default `false`)
+- `maxDepth?: number` (`1..40`, default `16`), `maxNodes?: number` (`1..2000`, default `300`)
+
+### Behavior
+
+Queries the accessibility tree (AT-SPI) for structured, addressable elements. More reliable than OCR where apps expose accessibility (GTK/Qt and most native apps; browsers/Electron only with a11y enabled — OCR is the fallback there).
+
+### Structured output
+
+- `apps[]`: `{ name, pid, children }`
+- `elements[]`: `{ role, name, depth, path, x, y, w, h, cx, cy, states[], actions[] }`
+- `count`, `truncated`
+
+`cx,cy` are screen coordinates ready for `mouse_click` with `target: "full"`.
+
+## `ui_tree`
+
+### Inputs
+
+- `focused?: boolean` (default `true`), `appName?: string`, `pid?: number`
+- `includeOffscreen?: boolean` (default `true`)
+- `maxDepth?: number` (`1..40`, default `18`), `maxNodes?: number` (`1..2000`, default `500`)
+
+### Behavior
+
+Dumps an application's accessibility tree as a flat, depth-tagged element list for planning/inspection. Same element shape as `ui_find`.

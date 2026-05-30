@@ -1,6 +1,6 @@
 ---
 name: saarthi-computer-use
-description: Use when controlling the local Hyprland desktop through the saarthi server, especially browser, WhatsApp Web, PDF viewer, window/workspace, screenshot, OCR, grid, mouse, and keyboard tasks that require verified real-screen interaction.
+description: Use when controlling the local Hyprland desktop through the saarthi server, especially browser, WhatsApp Web, PDF viewer, window/workspace, screenshot, accessibility-tree (ui_find), OCR, grid, mouse (click/drag), keyboard, and wait/verify tasks that require verified real-screen interaction.
 ---
 
 # saarthi Computer Use
@@ -13,9 +13,10 @@ Every meaningful action must be grounded in the current screen:
 
 1. focus the target window
 2. take or inspect a screenshot
-3. choose a target using grid/OCR/window metadata
-4. move or click
-5. verify the resulting state before the next action
+3. choose a target — prefer the accessibility tree (`ui_find`) for exact, addressable elements; fall back to grid/OCR/window metadata
+4. let the UI settle (`wait_for_stable` / `wait_for_text`) when it may still be loading or animating
+5. move or click
+6. verify the resulting state before the next action (`screenshot_compare`, OCR, or `ui_find`)
 
 Do not type, send, delete, archive, block, clear, or navigate away unless the current state proves the target is correct.
 
@@ -25,16 +26,41 @@ Do not type, send, delete, archive, block, clear, or navigate away unless the cu
 2. `workspace_topology` when task depends on monitor columns/left-right workspace placement
 3. `workspace_focus_relative` for deterministic left/right column hops (`createIfAbsent=true` when a monitor has no workspace)
 4. `window_focus_best` when `window_find` has multiple candidates
-5. `desktop_screenshot_save`
-6. `grid_show` for visual targeting, or `find_text_on_screen` for text discovery
-7. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
-8. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
-9. `grid_click` or `mouse_click`
-10. `action_step` for atomic verify loops when action certainty is critical
-11. `desktop_screenshot_save` or OCR verification
-12. `type_text` / `window_focus_and_type` only after target state is verified
+5. `wait_for_stable` after launching/navigating, before inspecting
+6. `ui_find` first — exact element targets with clickable `cx,cy` (use when the app exposes accessibility)
+7. `desktop_screenshot_save`, then `grid_show` / `find_text_on_screen` when accessibility is unavailable (browsers, Electron, canvas)
+8. `grid_cell_rect` for deterministic region bounds, then `desktop_screenshot_area` when you need stable cropped verification
+9. `grid_cell_to_point`, `grid_move`, `mouse_verify_in_view`
+10. `mouse_click` (with `ui_find` center, `target: "full"`), `grid_click`, `click_text`, or `mouse_drag` for sliders/selections
+11. `action_step` for atomic verify loops when action certainty is critical
+12. `screenshot_compare` / `wait_for_text` / OCR verification
+13. `type_text` / `window_focus_and_type` only after target state is verified (`sensitive: true` for secrets)
 
 Prefer `target: "window"` with a concrete `windowId` over `active_window` for multi-step work. This avoids focus drift.
+
+## Accessibility-First Targeting
+
+When the target app exposes the accessibility tree, `ui_find` beats OCR and grid:
+
+1. `ui_find` with `nameContains` / `role` (and `interactive: true`) scoped to the focused app.
+2. Read the matched element's `cx,cy` (screen coordinates) and `states` (e.g. `sensitive`/`enabled`).
+3. Click with `mouse_click` `target: "full"`, `x=cx`, `y=cy`.
+4. Use `ui_tree` to understand an unfamiliar UI before acting.
+
+Coverage is toolkit-dependent: GTK/Qt and most native apps expose a usable tree; Chromium/Electron and Firefox expose content only with accessibility enabled. If `ui_find` returns nothing meaningful, fall back to grid/OCR.
+
+## Verification and Settling
+
+- After launching/navigating, call `wait_for_stable` (target the window) so you act on a settled frame, not a half-loaded one.
+- Use `wait_for_text` (`mode: "appear"`) to block until expected content shows, or `"disappear"` to confirm a spinner/dialog cleared.
+- To prove an action changed something, capture a baseline, act, then `screenshot_compare` (or `action_step` which does before/after + verify in one call).
+
+## Input Primitives
+
+- Double/triple click: `mouse_click` with `clickCount`.
+- Sliders, selections, drag-and-drop: `mouse_drag` (both endpoints relative to the same target).
+- Hover/motion-driven UIs: `mouse_move` with `smooth: true` so the cursor glides and fires motion events.
+- Typing secrets (passwords): `type_text` / `window_focus_and_type` with `sensitive: true` so the value is masked in the status overlay.
 
 ## Grid Workflow
 
@@ -56,7 +82,7 @@ Use coarse grid first. If the cell is too large, call `grid_show` again with hig
 
 ## OCR Policy
 
-OCR is a hint, not proof.
+OCR is a hint, not proof. Prefer `ui_find` when the app exposes accessibility; reach for OCR when it does not.
 
 - Use OCR to locate candidate text.
 - Verify the match is in the expected region.
@@ -109,8 +135,10 @@ Use these labels when reporting a blocked action:
 - `focus_drift`: target window lost focus
 - `cursor_out_of_view`: pointer outside target bounds
 - `ocr_ambiguous`: text match is not unique or not region-safe
+- `a11y_unavailable`: app exposes no useful accessibility tree (fell back to grid/OCR)
 - `wrong_hotspot`: click opened a menu or wrong control
-- `state_not_changed`: click landed but expected UI did not change
+- `state_not_changed`: click landed but expected UI did not change (confirm with `screenshot_compare`)
+- `not_settled`: acted before the UI stabilised (`wait_for_stable`/`wait_for_text` would have helped)
 - `verification_failed`: expected text/header/input state not found
 
 ## Run Evidence
