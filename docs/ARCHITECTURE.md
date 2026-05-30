@@ -27,7 +27,7 @@ The server intentionally still does **not** expose shell execution, clipboard ac
 ## High-level Data Flow
 
 1. MCP host sends tool call over stdio.
-2. `src/index.ts` validates input with `zod` schemas and dispatches to adapters.
+2. The matching `src/handlers/*` tool handler validates input with `zod` schemas and dispatches to adapters.
 3. Hyprland adapter resolves live compositor signature from `/run/user/$UID/hypr/*/.socket.sock`.
 4. Adapter executes `hyprctl` or `grim` with `execFile` (no shell interpolation).
 5. Response is normalized to MCP `content` + optional `structuredContent`.
@@ -35,15 +35,37 @@ The server intentionally still does **not** expose shell execution, clipboard ac
 
 ## Module Layout
 
-- `src/index.ts`: MCP server, tool registration, and all tool handlers.
-- `src/lib/hyprland.ts`: Hyprland discovery, JSON query, dispatch execution, normalization.
-- `src/lib/screenshot.ts`: screenshot capture and PNG extraction.
-- `src/lib/image.ts`: PNG metadata parse and monitor/window geometry helpers.
-- `src/lib/grid.ts`: grid overlay cell/point/rect geometry helpers.
-- `src/lib/policy.ts`: launch policy loading, command parsing, alias resolution, rate limiting.
-- `src/lib/audit.ts`: append-only audit logger.
-- `src/lib/runlog.ts`: repo-local action trace log writer.
-- `src/lib/types.ts`: shared type definitions.
+Entry and shared runtime:
+
+- `src/index.ts`: thin entry — imports the handler modules (which register tools on import) and connects the stdio transport.
+- `src/server.ts`: the single `McpServer` instance, imported by every handler module.
+- `src/runtime.ts`: shared runtime state/config singletons (dry-run flag, session id, log paths, loaded policy, launch rate limiter, and the mutable grid-session holder).
+
+Tool handlers (one module per domain, each registers its tools on import):
+
+- `src/handlers/apps.ts`, `windows.ts`, `workspaces.ts`, `screenshots.ts`, `input.ts`, `mouse.ts`, `grid.ts`, `text.ts`, `observability.ts`, `composite.ts`.
+
+Adapters and helpers (`src/lib/`):
+
+- `hyprland.ts`: Hyprland discovery, JSON query, dispatch execution, normalization.
+- `screenshot.ts`: screenshot capture and PNG extraction.
+- `image.ts`: PNG metadata parse and monitor/window geometry helpers.
+- `grid.ts`: grid overlay cell/point/rect geometry helpers.
+- `pointer.ts`: pointer/grid target resolution and window-wait helpers.
+- `mouse.ts`: mouse move/click/scroll execution via `ydotool`/`hyprctl`.
+- `text-locate.ts`: OCR-based on-screen text search and click-point resolution.
+- `ocr.ts`: tesseract TSV parsing.
+- `input.ts`: keyboard key/modifier normalization and typed-text sanitization.
+- `apps.ts`: app catalog, launch-command resolution, and launch rate limiter.
+- `workspace.ts`: empty-workspace selection within policy bounds.
+- `policy.ts`: launch policy loading, command parsing, alias resolution.
+- `audit.ts`: append-only audit logger.
+- `runlog.ts`: repo-local action trace log writer.
+- `util.ts`: generic helpers (sleep, JSONL read, command existence, numeric parsing).
+- `types.ts`: shared type definitions.
+
+Other:
+
 - `config/policy.json`: launch policy config (allowed aliases, denied patterns, rate limit, workspace bounds).
 - `scripts/smoke-test.ts`: stdio smoke validation via MCP client.
 
