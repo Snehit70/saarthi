@@ -48,6 +48,27 @@ Every meaningful action must be grounded in the current screen:
 
 Do not type, send, delete, archive, block, clear, or navigate away unless the current state proves the target is correct.
 
+## Consent and Irreversible Actions
+
+Reversible actions are free; irreversible or outbound actions need a human "yes" first. The trigger is the intent, not the app.
+
+**Free** (act without asking): navigate, URL-bar Enter, search, focus, scroll, screenshot, open a menu, type into a field — anything you can undo.
+
+**Gated** (stop and ask me in chat before doing it):
+
+1. **Dispatching a message** — clicking send, or pressing Enter while a message composer is focused.
+2. **Committing a form** — post, publish, reply, place order, confirm, save-and-submit.
+3. **Destructive data ops** — delete, archive, clear, remove, block.
+4. **Money** — pay, buy, confirm a purchase.
+
+So: Enter to load a URL is free; Enter in a chat composer is a *send* and is gated.
+
+**How to ask:** stop, state the exact action and target (for a message, include the recipient and the message text), and wait for an explicit yes before proceeding.
+
+**Approval scope:** one "yes" covers that one action — approving a delete does not authorise the next. If I explicitly widen it ("send all of these", "you don't need to ask each time"), treat that as standing approval for that *action class* until the task changes, then it resets to per-action.
+
+**Dry-run is exempt** — nothing actually happens, so no consent is needed.
+
 ## Preferred Tool Order
 
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
@@ -75,6 +96,8 @@ When the target app exposes the accessibility tree, `ui_find` beats OCR and grid
 3. Click with `mouse_click` `target: "full"`, `x=cx`, `y=cy`.
 4. Use `ui_tree` to understand an unfamiliar UI before acting.
 
+`ui_find` coordinates are only valid within the same step. If you `wait_for_stable`/`wait_for_text` or otherwise let the UI change after finding, re-query `ui_find` before clicking — a scroll or relayout invalidates the old `cx,cy`.
+
 Coverage is toolkit-dependent: GTK/Qt and most native apps expose a usable tree; Chromium/Electron and Firefox expose content only with accessibility enabled. If `ui_find` returns nothing meaningful, fall back to grid/OCR.
 
 ## Verification and Settling
@@ -82,6 +105,7 @@ Coverage is toolkit-dependent: GTK/Qt and most native apps expose a usable tree;
 - After launching/navigating, call `wait_for_stable` (target the window) so you act on a settled frame, not a half-loaded one.
 - Use `wait_for_text` (`mode: "appear"`) to block until expected content shows, or `"disappear"` to confirm a spinner/dialog cleared.
 - To prove an action changed something, capture a baseline, act, then `screenshot_compare` (or `action_step` which does before/after + verify in one call).
+- Defaults are sane (`wait_for_stable`: 8s timeout, ~1% RMSE, 2 stable frames; `wait_for_text`: 8s, 400ms poll). Raise `timeoutMs` for slow apps. A timeout returns `{stable:false}`/`{ok:false}` — treat that as `not_settled` and apply the Recovery Rules; do not blindly proceed.
 
 ## Input Primitives
 
@@ -140,20 +164,14 @@ For WhatsApp chat selection:
 
 ## Send Policy
 
-Default behavior is prepare-only:
-
-- type message
-- stop before send
-- report screenshot path
-
-Only click send or press Enter when the user explicitly says sending is allowed. After sending, verify with a screenshot that the outgoing message is visible.
+Sending a message is a gated action (see **Consent and Irreversible Actions**). Default is prepare-only: select the chat, verify the right-pane header, click the composer, type the message, then stop and report the screenshot path. Click send / press Enter only after I approve sending. After sending, verify with a screenshot that the outgoing message is visible.
 
 ## Recovery Rules
 
 - If focus drifts: `window_focus` the known `windowId`, then screenshot.
 - If cursor might be off-target: `mouse_verify_in_view`.
 - If a modal/context menu appears: `key_press` `escape`, then screenshot.
-- If a click does not change state: do not repeat the same point. Use grid/OCR to choose a different target.
+- If an action does not change state: do not repeat the same point. Try exactly **one** alternate *method* (e.g. `ui_find` → grid/OCR, or re-focus then retry) and re-verify. If that also fails, stop and report the failure label with evidence — do not keep looping.
 - If URL bar/sidebar search traps input: click page content or use `escape`, then re-focus the address/page target.
 
 ## Failure Taxonomy
@@ -168,6 +186,8 @@ Use these labels when reporting a blocked action:
 - `state_not_changed`: click landed but expected UI did not change (confirm with `screenshot_compare`)
 - `not_settled`: acted before the UI stabilised (`wait_for_stable`/`wait_for_text` would have helped)
 - `verification_failed`: expected text/header/input state not found
+
+`a11y_unavailable` is a **routing signal**, not a blocked action — fall back to grid/OCR and keep going; never report it as a failure. For every other label, report it (with evidence) only after the single alternate attempt from Recovery Rules has also failed.
 
 ## Run Evidence
 
