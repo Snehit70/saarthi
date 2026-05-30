@@ -90,6 +90,8 @@ async function main(): Promise<void> {
       "wait_for_text",
       "wait_for_stable",
       "screenshot_compare",
+      "ui_find",
+      "ui_tree",
     ];
 
     for (const name of required) {

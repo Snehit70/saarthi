@@ -19,6 +19,7 @@ export type ErrorCode =
   | "APP_LAUNCH_FAILED"
   | "INPUT_FAILED"
   | "OCR_FAILED"
+  | "ATSPI_FAILED"
   | "ACTION_TIMEOUT";
 
 export class HyprlandError extends Error {

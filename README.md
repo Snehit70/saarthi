@@ -46,6 +46,8 @@ Local MCP server for Hyprland window/workspace control, screenshots, and basic U
 - `mouse_click`
 - `mouse_drag`
 - `mouse_scroll`
+- `ui_find`
+- `ui_tree`
 - `find_text_on_screen`
 - `wait_for_text`
 - `wait_for_stable`
@@ -61,11 +63,17 @@ No shell execution, clipboard, or remote transport.
 - `hyprctl`
 - `grim`
 - `wtype` (for `type_text`)
-- `tesseract` (for `find_text_on_screen`)
-- `ydotool` (for `mouse_click` / reliable focus-recovery)
-- `ImageMagick` (`magick`, for `grid_show`)
+- `tesseract` (for `find_text_on_screen` / `wait_for_text`)
+- `ydotool` (for `mouse_click`, `mouse_drag` / reliable focus-recovery)
+- `ImageMagick` (`magick`, for `grid_show` and `screenshot_compare` / `wait_for_stable`)
+- `python3` + `python3-gobject` + `python3-pyatspi` + a running AT-SPI bus (for `ui_find` / `ui_tree`)
 - Node 20+
 - `pnpm`
+
+> Accessibility coverage (`ui_find` / `ui_tree`) is toolkit-dependent: GTK/Qt and
+> most native apps expose a usable tree; Chromium/Electron and Firefox expose
+> their content only when launched with accessibility enabled. OCR
+> (`find_text_on_screen`) remains the fallback for those.
 
 ## Install
 

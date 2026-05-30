@@ -86,6 +86,10 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
     case "desktop_screenshot_save":
     case "desktop_screenshot_area":
       return "Taking screenshot";
+    case "ui_find":
+      return "Finding UI elements";
+    case "ui_tree":
+      return "Reading the UI tree";
     case "window_list":
     case "window_find":
     case "window_get":

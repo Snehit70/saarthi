@@ -14,6 +14,7 @@ Operational errors raised by the Hyprland adapter use a stable prefixed format:
 - `[APP_LAUNCH_FAILED] ...`
 - `[INPUT_FAILED] ...`
 - `[OCR_FAILED] ...`
+- `[ATSPI_FAILED] ...`
 - `[ACTION_TIMEOUT] ...`
 
 ## `app_list`
