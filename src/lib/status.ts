@@ -7,7 +7,6 @@ import { homedir } from "node:os";
 // are fire-and-forget (never awaited by callers).
 
 const STATUS_PATH = join(homedir(), ".local", "state", "saarthi", "status.json");
-const STATUS_TMP = `${STATUS_PATH}.tmp`;
 const MAX_STEPS = 6;
 const ENABLED = process.env.SAARTHI_STATUS !== "0";
 
@@ -33,6 +32,7 @@ interface StatusSnapshot {
 }
 
 let seq = 0;
+let tmpSeq = 0;
 const recent: Step[] = [];
 let dirEnsured = false;
 
@@ -55,8 +55,12 @@ async function flush(state: "active" | "idle"): Promise<void> {
       await mkdir(dirname(STATUS_PATH), { recursive: true });
       dirEnsured = true;
     }
-    await writeFile(STATUS_TMP, JSON.stringify(snapshot), "utf8");
-    await rename(STATUS_TMP, STATUS_PATH);
+    // Unique temp per write: emitActive/emitDone flush concurrently (fire and
+    // forget), so a shared temp file would let two writes interleave before the
+    // atomic rename. Each rename is still atomic; last writer wins.
+    const tmp = `${STATUS_PATH}.${process.pid}.${(tmpSeq += 1)}.tmp`;
+    await writeFile(tmp, JSON.stringify(snapshot), "utf8");
+    await rename(tmp, STATUS_PATH);
   } catch {
     // best-effort; the overlay is optional
   }
