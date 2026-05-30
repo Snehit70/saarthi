@@ -160,7 +160,12 @@ class Overlay:
 
         if self.ready:
             js = "window.saarthiUpdate && window.saarthiUpdate(%s)" % json.dumps(raw)
-            self.web.run_javascript(js, None, None, None)
+            # evaluate_javascript (WebKit 2.40+) supersedes the deprecated
+            # run_javascript; fall back on older WebKit2GTK builds.
+            if hasattr(self.web, "evaluate_javascript"):
+                self.web.evaluate_javascript(js, -1, None, None, None, None, None)
+            else:
+                self.web.run_javascript(js, None, None, None)
 
     def _show(self):
         if not self.win.get_visible():
