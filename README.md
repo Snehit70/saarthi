@@ -83,6 +83,21 @@ See `docs/OPERATIONS.md` for exact Fedora override steps.
 
 Use the repo skill playbook at `skill/SKILL.md` for strict computer-use execution loops (focus lock, screenshot verification gates, and failure taxonomy).
 
+## Overlay HUD (optional)
+
+A small always-on-top HUD that pops up in the top-right while saarthi is acting,
+with animated "thinking" eyes, the current action, and a live feed of recent
+steps. The server emits a status feed to `~/.local/state/saarthi/status.json`
+on every tool call (disable with `SAARTHI_STATUS=0`); a separate Wayland
+layer-shell process renders it.
+
+```bash
+overlay/saarthi-overlay          # live
+overlay/saarthi-overlay --demo   # standalone visual demo
+```
+
+See `overlay/README.md` for the status contract, requirements, and Hyprland autostart.
+
 ## Safety
 
 - Uses current user session only.

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Launch the saarthi overlay HUD (Wayland layer-shell + WebKit2GTK).
+# Usage: ./saarthi-overlay [--demo]
+set -euo pipefail
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+exec python3 "$here/host.py" "$@"
