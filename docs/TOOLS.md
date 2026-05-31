@@ -978,3 +978,76 @@ Queries the accessibility tree (AT-SPI) for structured, addressable elements. Mo
 ### Behavior
 
 Dumps an application's accessibility tree as a flat, depth-tagged element list for planning/inspection. Same element shape as `ui_find`.
+
+## `tmux_list`
+
+### Inputs
+
+None.
+
+### Behavior
+
+Lists all tmux sessions, windows, and panes without focusing any window. The primary way to discover a target. Read-only.
+
+### Structured output
+
+- `sessions[]`: `{ name, attached, windows }`
+- `panes[]`: `{ session, windowIndex, windowName, windowActive, paneIndex, paneId, target, active, sessionAttached, command, pid, title, width, height, cwd, isShell }`
+
+`target` is the `session:window.pane` string accepted by the other tmux tools. `command` is `pane_current_command`; `isShell` is false when a foreground program (editor, REPL, ssh, dev server) is running.
+
+## `tmux_capture`
+
+### Inputs
+
+- `target?: string` — `session:window.pane`, `session:window`, `%paneId`, a session name, or omit for the attached active pane
+- `lines?: number` (`1..5000`) — return only the last N lines
+- `scrollback?: number` (`0..50000`, default `0`) — lines of scrollback to include
+
+### Behavior
+
+Captures a pane's text. Use this instead of screenshots/OCR to read terminal state. Read-only.
+
+### Structured output
+
+- `target`, `command`, `isShell`, `text`
+
+## `tmux_run_command`
+
+### Inputs
+
+- `command: string` (required)
+- `target?: string` — pane target (see `tmux_capture`); omit for the attached active pane
+- `confirmBusy?: boolean` (default `false`) — set true only after confirming it is OK to send into a non-shell pane
+- `timeoutMs?: number` (`200..900000`, default `120000`)
+- `pollMs?: number` (`50..5000`, default `250`)
+- `scrollback?: number` (`0..50000`, default `3000`)
+- `maxOutputLines?: number` (`1..5000`, default `200`)
+
+### Behavior
+
+Runs a shell command in a pane and waits for completion using start/end sentinels (no prompt guessing), returning the parsed exit code and the command's output. fish panes use `$status`; other shells use `$?`. Refuses non-shell panes with `TMUX_PANE_BUSY` unless `confirmBusy` is set. On timeout it sends `C-c` to the command it started and returns `timedOut: true`.
+
+`classification` is advisory: `mutating` commands should be confirmed with the user first per the consent model; `safe` read-only commands run freely.
+
+### Structured output
+
+- `target`, `command`, `classification` (`safe`|`mutating`), `exitCode` (number|null), `output`, `timedOut`, `interrupted`, `durationMs`
+
+## `tmux_send_keys`
+
+### Inputs
+
+- `keys: string` (required)
+- `target?: string` — pane target; omit for the attached active pane
+- `literal?: boolean` (default `true`) — true: literal text; false: tmux key names (`Enter`, `C-c`, `Up`)
+- `enter?: boolean` (default `false`) — press Enter after sending
+- `confirmBusy?: boolean` (default `false`)
+
+### Behavior
+
+Sends raw keys to a pane for interactive programs (REPLs, editors, pickers) or control keys. Refuses non-shell panes unless `confirmBusy`. Does not wait for or parse output — follow with `tmux_capture`.
+
+### Structured output
+
+- `sent`, `target`, `enter`

@@ -67,6 +67,20 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
         return "Opening URL in Zen";
       }
     }
+    case "tmux_list":
+      return "Listing tmux panes";
+    case "tmux_capture": {
+      const t = str(args, "target");
+      return t ? `Reading ${t}` : "Reading terminal";
+    }
+    case "tmux_run_command": {
+      const cmd = str(args, "command");
+      if (!cmd) return "Running command";
+      const short = cmd.length > 40 ? `${cmd.slice(0, 39)}…` : cmd;
+      return `Running ${quote(short)}`;
+    }
+    case "tmux_send_keys":
+      return "Sending keys to terminal";
     case "window_focus":
     case "window_focus_best":
       return "Focusing window";

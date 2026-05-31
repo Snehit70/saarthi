@@ -28,8 +28,18 @@ function textOf(res: any): string {
 describe("tool registration", () => {
   it("exposes every tool with a name and input schema", async () => {
     const { tools } = await ctx.client.listTools();
-    expect(tools.length).toBeGreaterThanOrEqual(47);
-    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(["browser_discover", "browser_focus", "browser_open_url"]));
+    expect(tools.length).toBeGreaterThanOrEqual(51);
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        "browser_discover",
+        "browser_focus",
+        "browser_open_url",
+        "tmux_list",
+        "tmux_capture",
+        "tmux_run_command",
+        "tmux_send_keys",
+      ]),
+    );
     for (const t of tools) {
       expect(t.name).toBeTruthy();
       expect(t.inputSchema).toBeTruthy();

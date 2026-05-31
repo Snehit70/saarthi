@@ -71,6 +71,8 @@ So: Enter to load a URL is free; Enter in a chat composer is a *send* and is gat
 
 ## Preferred Tool Order
 
+For terminal/CLI work, skip GUI targeting entirely and use the tmux tools (see **## tmux**) — they are deterministic. The order below is for GUI apps.
+
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
 2. `workspace_topology` when task depends on monitor columns/left-right workspace placement
 3. `workspace_focus_relative` for deterministic left/right column hops (`createIfAbsent=true` when a monitor has no workspace)
@@ -141,6 +143,29 @@ OCR is a hint, not proof. Prefer `ui_find` when the app exposes accessibility; r
 - Avoid acting on text if the same label can appear in multiple places.
 - Prefer partial tokens for discovery (`CODE`, `TEJAS`) but verify final state with stronger anchors (header title, input placeholder, selected row).
 - For non-fullscreen targets, use tools that convert target-relative coordinates internally (`click_text`, `mouse_move_to_text`) or grid tools.
+
+## tmux (terminal control)
+
+On this machine every terminal is already a tmux session: kitty's shell is a `sesh` launcher, so each window attaches/creates a session named after its project directory (e.g. `praxis`, `pravah`, `saarthi`). prefix is `C-Space`, base-index 1, `renumber-windows on`, `M-H`/`M-L` switch windows, `prefix+j` is the sesh picker.
+
+**For anything in a terminal, drive tmux directly — never type through the window manager and never screenshot/OCR a terminal.** Reading a pane is deterministic; so is running a command and reading its exit code.
+
+Tools:
+
+- `tmux_list` — discover sessions/windows/panes and each pane's `pane_current_command`. Start here to find a target. (read)
+- `tmux_capture` — read a pane's text (and scrollback). This replaces screenshots/OCR for terminal state. (read)
+- `tmux_run_command` — run a shell command in a pane and wait for completion; returns the parsed `exitCode` and the command's `output`. (act)
+- `tmux_send_keys` — raw keys for REPLs/editors/pickers and control keys (Enter, Escape, C-c, arrows). Use after a pane has been confirmed. (act)
+
+Rules:
+
+- **Headless by name.** Act on `session:window.pane` (or a bare session name, or `%paneId`). No GUI focus required; background sessions work.
+- **Targeting.** Explicit target wins; else a named session's active pane; else the attached active pane. If the tool returns `TMUX_TARGET_NOT_FOUND` or `TMUX_TARGET_AMBIGUOUS` (with candidates), ask which pane — never guess.
+- **Execution consent.** Reads (`tmux_list`/`tmux_capture`) are always free. `tmux_run_command` reports a `classification`: `safe` (read-only commands — `ls`, `git status`, `rg`, `cat`, tests) run freely; `mutating` (`rm`, `git push`, `sudo`, `dropdb`, anything not on the allowlist) is a gated act — confirm in chat first, then widenable for the rest of the turn. This obeys **Consent and Irreversible Actions**.
+- **Busy panes.** If a pane is not at a shell prompt (running vim, a REPL, ssh, a dev server), the tool refuses with `TMUX_PANE_BUSY` and names what's running. Ask the user, then re-call with `confirmBusy: true`. Do not blindly send into a non-shell pane.
+- **No lifecycle.** Never create or kill sessions/windows/panes — operate only within existing ones. The user owns structure via sesh.
+- **Completion is the exit code, not the vibe.** `tmux_run_command` waits on a sentinel and returns the real exit code (`$status` on fish, `$?` elsewhere). Branch on `exitCode === 0`, not on output text.
+- **Interrupts.** On timeout the tool sends `C-c` to the command it started and returns `timedOut: true` — report that, raise `timeoutMs`, or pick a different approach. Never send `C-d`/exit, and never interrupt a process the user launched.
 
 ## Browser and WhatsApp Web
 
