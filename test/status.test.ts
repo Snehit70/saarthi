@@ -23,13 +23,19 @@ async function readSnap(): Promise<any> {
 }
 
 describe("status feed", () => {
-  it("writes an active snapshot with the running step as current", async () => {
-    const id = status.emitActive("type_text", "act", "Typing (hidden)");
+  it("writes a task-aware snapshot with the running step as current", async () => {
+    const task = status.startTask("send a message");
+    const id = status.recordStepStart("type_text", "act", "Typing (hidden)");
     await vi.waitFor(async () => {
       const s = await readSnap();
-      expect(s.schema).toBe(1);
+      expect(s.schema).toBe(2);
       expect(s.sessionId).toBe("status-test");
       expect(s.state).toBe("active");
+      expect(s.task).toMatchObject({
+        id: task.id,
+        label: "send a message",
+        state: "working",
+      });
       expect(s.current).toMatchObject({
         tool: "type_text",
         kind: "act",
@@ -37,37 +43,73 @@ describe("status feed", () => {
         label: "Typing (hidden)",
       });
     });
-    status.emitDone(id, true);
+    status.recordStepDone(id, true);
     await vi.waitFor(async () => {
       const s = await readSnap();
-      expect(s.state).toBe("idle");
+      expect(s.state).toBe("active");
+      expect(s.task.state).toBe("waiting");
       expect(s.current).toBeNull();
       const step = s.recent.find((x: any) => x.id === id);
       expect(step.state).toBe("done");
+      expect(s.task.stats).toMatchObject({ steps: 1, acts: 1, errors: 0 });
     });
   });
 
   it("marks a failed step as error", async () => {
-    const id = status.emitActive("window_get", "read", "Inspecting window");
-    status.emitDone(id, false);
+    status.startTask("inspect bad window");
+    const id = status.recordStepStart("window_get", "read", "Inspecting window");
+    status.recordStepDone(id, false);
     await vi.waitFor(async () => {
       const s = await readSnap();
       const step = s.recent.find((x: any) => x.id === id);
       expect(step.state).toBe("error");
+      expect(s.task.state).toBe("waiting");
+      expect(s.task.stats.errors).toBe(1);
     });
   });
 
-  it("keeps at most six recent steps", async () => {
+  it("keeps at most twenty-five recent steps", async () => {
+    status.startTask("many steps");
     // Serialize so each pair's fire-and-forget flush settles before the next
     // emit; otherwise the last rename to land may carry a ramp-up snapshot.
-    for (let i = 0; i < 10; i += 1) {
-      const id = status.emitActive(`tool_${i}`, "read", `step ${i}`);
-      status.emitDone(id, true);
+    for (let i = 0; i < 30; i += 1) {
+      const id = status.recordStepStart(`tool_${i}`, "read", `step ${i}`);
+      status.recordStepDone(id, true);
       await new Promise((r) => setTimeout(r, 8));
     }
     await vi.waitFor(async () => {
       const s = await readSnap();
-      expect(s.recent.length).toBe(6);
+      expect(s.recent.length).toBe(25);
+      expect(s.recent[0].tool).toBe("tool_5");
+      expect(s.task.stats.steps).toBe(30);
+    });
+  });
+
+  it("marks task completion as idle after explicit completion", async () => {
+    status.startTask("complete me");
+    status.completeTask("done");
+    await vi.waitFor(async () => {
+      const s = await readSnap();
+      expect(s.state).toBe("idle");
+      expect(s.task.state).toBe("complete");
+      expect(s.task.completedAt).toBeTruthy();
+    });
+  });
+
+  it("supports dormant pings and timeout completion", async () => {
+    status.startTask("long wait");
+    status.pingTask("dormant_waiting");
+    await vi.waitFor(async () => {
+      const s = await readSnap();
+      expect(s.state).toBe("active");
+      expect(s.task.state).toBe("dormant_waiting");
+    });
+
+    status.completeTask("timeout");
+    await vi.waitFor(async () => {
+      const s = await readSnap();
+      expect(s.state).toBe("idle");
+      expect(s.task.state).toBe("timeout");
     });
   });
 });

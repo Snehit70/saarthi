@@ -28,7 +28,8 @@ function textOf(res: any): string {
 describe("tool registration", () => {
   it("exposes every tool with a name and input schema", async () => {
     const { tools } = await ctx.client.listTools();
-    expect(tools.length).toBeGreaterThanOrEqual(44);
+    expect(tools.length).toBeGreaterThanOrEqual(47);
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(["browser_discover", "browser_focus", "browser_open_url"]));
     for (const t of tools) {
       expect(t.name).toBeTruthy();
       expect(t.inputSchema).toBeTruthy();
@@ -43,8 +44,11 @@ describe("status-feed wrapper", () => {
 
     await vi.waitFor(async () => {
       const snap = await readStatus();
-      expect(snap.schema).toBe(1);
+      expect(snap.schema).toBe(2);
       expect(snap.sessionId).toBe("test-session");
+      expect(snap.task).toMatchObject({
+        state: "waiting",
+      });
       expect(Array.isArray(snap.recent)).toBe(true);
       const step = [...snap.recent].reverse().find((s: any) => s.tool === "window_list");
       expect(step).toBeTruthy();
@@ -65,6 +69,44 @@ describe("status-feed wrapper", () => {
       const step = [...snap.recent].reverse().find((s: any) => s.tool === "window_get");
       expect(step).toBeTruthy();
       expect(step.state).toBe("error");
+      expect(snap.task.stats.errors).toBeGreaterThanOrEqual(1);
+    });
+  });
+});
+
+describe("overlay lifecycle tools", () => {
+  it("keeps a task active between calls until explicit completion", async () => {
+    const started: any = await ctx.client.callTool({
+      name: "overlay_task_start",
+      arguments: { label: "review desktop" },
+    });
+    expect(started.isError).toBeFalsy();
+
+    const health = await ctx.client.callTool({ name: "desktop_health", arguments: {} });
+    expect(health.isError).toBeFalsy();
+
+    await vi.waitFor(async () => {
+      const snap = await readStatus();
+      expect(snap.state).toBe("active");
+      expect(snap.task).toMatchObject({
+        label: "review desktop",
+        state: "waiting",
+      });
+      expect(snap.current).toBeNull();
+      expect(snap.recent.some((s: any) => s.tool === "desktop_health")).toBe(true);
+    });
+
+    const completed = await ctx.client.callTool({
+      name: "overlay_task_complete",
+      arguments: { status: "done" },
+    });
+    expect(completed.isError).toBeFalsy();
+
+    await vi.waitFor(async () => {
+      const snap = await readStatus();
+      expect(snap.state).toBe("idle");
+      expect(snap.task.state).toBe("complete");
+      expect(snap.task.completedAt).toBeTruthy();
     });
   });
 });
