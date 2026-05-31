@@ -67,6 +67,14 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
         return "Opening URL in Zen";
       }
     }
+    case "browser_vimium_hint": {
+      const text = str(args, "visibleText");
+      return text ? `Targeting ${quote(text)} in Zen` : "Targeting page in Zen";
+    }
+    case "browser_space_step": {
+      const direction = str(args, "direction");
+      return direction ? `Switching Zen space ${direction}` : "Switching Zen space";
+    }
     case "tmux_list":
       return "Listing tmux panes";
     case "tmux_capture": {

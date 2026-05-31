@@ -34,6 +34,8 @@ describe("tool registration", () => {
         "browser_discover",
         "browser_focus",
         "browser_open_url",
+        "browser_vimium_hint",
+        "browser_space_step",
         "tmux_list",
         "tmux_capture",
         "tmux_run_command",

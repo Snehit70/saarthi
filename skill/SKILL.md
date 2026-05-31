@@ -167,6 +167,62 @@ Rules:
 - **Completion is the exit code, not the vibe.** `tmux_run_command` waits on a sentinel and returns the real exit code (`$status` on fish, `$?` elsewhere). Branch on `exitCode === 0`, not on output text.
 - **Interrupts.** On timeout the tool sends `C-c` to the command it started and returns `timedOut: true` — report that, raise `timeoutMs`, or pick a different approach. Never send `C-d`/exit, and never interrupt a process the user launched.
 
+## Zen browser
+
+On this machine Zen is the primary browser and is the Flatpak app `app.zen_browser.zen`. `browser_discover` is the source of truth before browser work: it reports running Zen windows, profile paths, device prefs, containers, extensions, and configured Zen shortcuts. Do not generalize these facts to another machine without rediscovery.
+
+Current device facts verified from the local Zen profile:
+
+- Single profile: `5yvfntxd.Default (release)` under `~/.var/app/app.zen_browser.zen/.zen`.
+- Vertical tabs are on the right (`zen.tabs.vertical.right-side=true`), so right-edge grid clicks may hit tabs/pinned tabs.
+- The URL bar floats (`zen.urlbar.behavior=float`), so URL/chrome targeting should use keyboard shortcuts, not fixed coordinates.
+- Zen spaces are active with continue-where-left-off (`zen.workspaces.continue-where-left-off=true`).
+- A public `College` container exists.
+- Installed active extensions include Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit.
+- Live AT-SPI probe on 2026-05-31 against `Example Domain — Zen Browser` returned no Zen app/page elements, so treat Zen page AT-SPI as unavailable on this machine unless a fresh probe proves otherwise.
+
+Authenticated browser model:
+
+- Use the user's existing local Zen profile/window so cookies, localStorage, saved passwords, extensions, and containers stay intact.
+- Do not create a clean/headless/browser-test profile for user-facing browser tasks; that loses auth state and changes fingerprint/extension behavior.
+- Do not attach another independent automation engine to the same profile. Browser profiles are single-owner state; competing controllers can lock or corrupt session behavior.
+- Prefer local GUI/extension-aware control over remote browser transport. This repo intentionally keeps stdio MCP and does not expose browser HTTP/CDP control.
+- If auth has expired, navigate to the login/recovery page and stop for user action or explicit credentials. Never scrape saved passwords, never guess credentials, and never auto-submit login.
+
+Tools:
+
+- `browser_discover` — read Zen install/profile/prefs/container/extension/shortcut facts and running windows. Start here. (read)
+- `browser_focus` — focus the best matching Zen window. (act)
+- `browser_open_url` — open an allowed URL. Default is a new tab in an existing Zen window; falls back to a new window when no Zen window exists. (act)
+- `browser_vimium_hint` — Vimium-first page targeting: focus Zen, press `f`, type visible text, optionally commit with Enter. (act)
+- `browser_space_step` — switch Zen spaces forward/backward using configured shortcuts and return the opposite restore action. (act)
+
+Rules:
+
+- **Page targeting order.** For in-page elements, use Vimium first: `browser_vimium_hint` with the element's visible text. If Vimium cannot target it, try AT-SPI with `ui_find`. If AT-SPI does not expose useful page content, fall back to OCR/grid.
+- **Chrome targeting.** Do not use Vimium for URL bar, tabs, spaces, settings panels, or browser chrome. Use `browser_open_url`, Zen shortcuts, `browser_space_step`, or grid/OCR against verified chrome regions.
+- **Navigation default.** Routine navigation goes to a new tab: `Ctrl+T`, `Ctrl+L`, type URL, `Enter` through `browser_open_url`. Navigate the current tab only when the active tab is already verified blank/new-tab or the user says "here"; then pass `mode:"current-tab"` and `currentTabReason`.
+- **Fast navigation loop.** Use `browser_open_url` as the single primitive for open/focus/type/Enter/readiness. Its default is fast: open a new tab, focus the floating URL bar, type the URL, press Enter, then watch the Zen title for readiness. For known apps, pass `readiness:"title-contains"` with a stable title fragment (for example `Inbox`, `Dashboard`, or the product name). For throwaway blank pages or follow-up checks where you will immediately use `wait_for_text`, pass `readiness:"none"` to avoid double-waiting.
+- **Readiness is a hint, not proof.** `browser_open_url` can return `readiness.ready:false` when the title does not settle before `readyTimeoutMs`. That means the URL was entered but page readiness is unproven. Do not click/type into page content yet; run `wait_for_text`, screenshot/OCR, or grid verification. If those fail too, label `not_settled` or `verification_failed`.
+- **New windows.** Use `browser_open_url` with `mode:"new-window"` only when the task explicitly asks for a new window or no Zen window exists.
+- **Spaces and pinned tabs.** It is acceptable to switch Zen spaces and click pinned tabs to reach a target, but record the starting space/route and switch back before finishing. `browser_space_step` returns the restore direction/count. Never close, unpin, or repin pinned tabs.
+- **Commit gates.** Reading, scrolling, navigation, and typing into fields are free. Pause for chat confirmation before submit/send/post/buy/payment/destructive actions. `browser_vimium_hint` refuses to commit gated action kinds unless `confirmed:true`; this does not replace the need to verify the target first.
+- **Login safety.** Type only credentials explicitly provided in the task. Never use, save, guess, or submit stored credentials. Do not auto-submit login forms.
+- **Hands off config.** Do not change Zen settings, `about:config`, profiles, containers, extensions, or extension settings as a side effect. If a task seems to need configuration changes, ask and treat that as a separate gated task.
+- **Extension awareness.** Work with installed extensions. Do not re-dismiss a banner Consent-O-Matic handled. Expect Dark Reader color changes. Remember that uBlock Origin and Unhook may remove page elements; missing page content may be intentional.
+- **AT-SPI check.** Current local evidence says Zen page AT-SPI is unavailable. Before depending on `ui_find` for a Zen page, focus Zen and run a small `ui_find`/`ui_tree` probe. If it returns only chrome or no useful page nodes, label that route `a11y_unavailable` and proceed to OCR/grid.
+
+Performance and failure readiness:
+
+- Keep one live Zen window warm. Cold Flatpak launch can take tens of seconds; existing-window new tabs usually complete in one tool call.
+- Prefer title readiness first because it is cheap and does not require screenshots. Use visual waits only for page-specific proof.
+- Do not chain manual `browser_focus` + `key_press` + `type_text` + `key_press` for normal URLs; that is slower and easier to race than `browser_open_url`.
+- After navigation, start from the returned `window.id` and `readiness` fields. If `ready:true`, inspect the page immediately. If `ready:false`, wait for one strong page anchor (`wait_for_text`) before acting.
+- For pages that keep the old title during SPA loads, use `readiness:"none"` plus `wait_for_text` on a real page anchor; otherwise title-change waiting wastes time.
+- For login or auth-expired pages, stop at the recovery screen unless credentials were explicitly provided. Typing credentials is allowed; submitting the login remains gated.
+- If a Vimium hint fails or the wrong thing opens, press `escape`, verify the page/URL state, and try one alternate route (`ui_find` probe, then OCR/grid). Do not repeatedly press Enter or reuse stale hint labels.
+- If Zen is missing from `browser_discover.runningWindows`, prefer `browser_open_url` with the requested URL instead of launching Zen separately. It records the fallback and readiness outcome.
+
 ## Browser and WhatsApp Web
 
 Before messaging:

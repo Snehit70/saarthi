@@ -234,9 +234,17 @@ Discovers the local browser state Saarthi currently supports:
 - Firefox native availability
 - default desktop browser handlers
 - Zen and Firefox profile names/paths from `profiles.ini`
+- Zen device facts from the default profile:
+  - single/default profile path
+  - right-side vertical tabs and floating URL bar prefs
+  - active/continue-where-left-off workspace prefs
+  - public Firefox containers
+  - visible active/disabled extensions plus known extension flags for Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit
+  - configured Zen shortcuts for workspace forward/backward, pin-tab toggle, copy URL, and compact-mode toggle
+  - reliability/auth posture: reuse the existing local profile, preserve user-owned cookies/localStorage/saved-password state, and do not start independent automation against the same profile
 - currently running Zen windows
 
-This is a read-only inventory tool; it does not create profiles or launch a browser.
+This is a read-only inventory tool; it does not create profiles, change preferences, install extensions, or launch a browser.
 
 ## `browser_focus`
 
@@ -255,10 +263,17 @@ If `titleContains` is provided, only matching Zen window titles are considered.
 ### Inputs
 
 - `url: string`
-- `reuseExisting?: boolean` (default `false`)
+- `mode?: "new-tab" | "new-window" | "current-tab"` (default `"new-tab"`)
+- `reuseExisting?: boolean` (deprecated compatibility flag)
 - `titleContains?: string`
-- `timeoutMs?: number` (default `12000`)
+- `currentTabReason?: "blank-page-verified" | "user-said-here"` (required for `mode="current-tab"`)
+- `timeoutMs?: number` (default `45000`)
 - `pollMs?: number` (default `200`)
+- `typeDelayMs?: number` (default `0`)
+- `readiness?: "none" | "title-change" | "title-contains"` (default `title-change` for `http(s)`, `none` for `about:`)
+- `readyTitleContains?: string` (required when `readiness="title-contains"`)
+- `readyTimeoutMs?: number` (default `12000`)
+- `readyPollMs?: number` (default `250`)
 
 ### Behavior
 
@@ -266,10 +281,18 @@ Opens an allowed URL in the local Zen Flatpak browser.
 
 - Allowed URLs: `http:`, `https:`, `about:home`, `about:blank`
 - Rejected URLs: `file:`, `mailto:`, custom schemes, relative URLs, URLs with credentials
-- `reuseExisting=false`: launches Zen with `--new-window`
-- `reuseExisting=true`: focuses a matching existing Zen window when available and opens the URL with `--new-tab`; otherwise falls back to `--new-window`
+- `mode="new-tab"`: focuses a matching existing Zen window, presses `Ctrl+T`, `Ctrl+L`, types the URL, and presses `Enter`
+- `mode="current-tab"`: requires `currentTabReason` and uses `Ctrl+L`, typed URL, `Enter`
+- `mode="new-window"`: launches Zen with `--new-window`
+- when no Zen window exists, `new-tab` and `current-tab` fall back to `--new-window`
+- after pressing Enter, the tool waits for lightweight readiness:
+  - `title-change` returns when the Zen title changes away from a blank/new-tab-like title
+  - `title-contains` returns when the title contains `readyTitleContains`
+  - `none` skips readiness waiting
 
 The launch is Zen-first and uses structured process arguments rather than raw shell interpolation. The tool still requires the `zen` launch alias to be allowed by policy, validates Zen availability through the launch policy, and enforces the shared launch rate limit.
+The default is intentionally new-tab so pinned tabs and the current page are not clobbered by routine navigation.
+Readiness timeout is reported as `readiness.ready=false`; it is not treated as a failed URL entry. Callers should verify with OCR/grid/wait tools before acting on page content.
 
 ### Structured output
 
@@ -277,9 +300,62 @@ The launch is Zen-first and uses structured process arguments rather than raw sh
 - `browser`
 - `url`
 - `mode`
+- `effectiveMode`
 - `window`
 - `attempts`
 - `wasNewWindow`
+- `readiness`
+
+## `browser_vimium_hint`
+
+### Inputs
+
+- `visibleText: string`
+- `windowId?: string`
+- `titleContains?: string`
+- `commit?: boolean` (default `true`)
+- `actionKind?: "read" | "navigate" | "type-field" | "send" | "commit-submit" | "destructive" | "payment"` (default `"navigate"`)
+- `confirmed?: boolean` (default `false`)
+- `focusSettleMs?: number` (default `120`)
+- `hintSettleMs?: number` (default `120`)
+- `typeDelayMs?: number` (default `0`)
+
+### Behavior
+
+Focuses a Zen window and drives Vimium in-page hints: press `f`, type visible text to filter hints, then press `Enter` when `commit=true`.
+If `actionKind` is `send`, `commit-submit`, `destructive`, or `payment`, committing requires `confirmed=true`.
+Use this for page content, not browser chrome. Use URL bar and Zen shortcuts for chrome.
+
+### Structured output
+
+- `hinted`
+- `committed`
+- `window`
+- `actionKind`
+
+## `browser_space_step`
+
+### Inputs
+
+- `direction: "forward" | "backward"`
+- `count?: number` (default `1`)
+- `windowId?: string`
+- `titleContains?: string`
+- `settleMs?: number` (default `120`)
+
+### Behavior
+
+Focuses a Zen window and steps Zen spaces using the configured workspace forward/backward shortcut from the default profile.
+The result includes the opposite `restore` action. Callers that temporarily switch spaces must call that restore action before finishing the task.
+This tool never closes tabs, pins tabs, unpins tabs, edits Zen preferences, or changes extensions.
+
+### Structured output
+
+- `stepped`
+- `direction`
+- `count`
+- `window`
+- `restore`
 
 ## `app_launch_and_wait`
 
