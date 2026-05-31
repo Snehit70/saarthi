@@ -58,7 +58,7 @@ class Overlay:
         self.win.set_decorated(False)
         self.win.set_resizable(False)
         self.win.set_app_paintable(True)
-        self.win.set_default_size(330, 280)
+        self.win.set_default_size(366, 330)
 
         # transparent visual
         screen = self.win.get_screen()
