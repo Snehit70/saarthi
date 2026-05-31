@@ -5,6 +5,7 @@ import "./runtime.js";
 import "./handlers/windows.js";
 import "./handlers/workspaces.js";
 import "./handlers/apps.js";
+import "./handlers/browser.js";
 import "./handlers/screenshots.js";
 import "./handlers/input.js";
 import "./handlers/mouse.js";

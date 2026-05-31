@@ -220,6 +220,67 @@ Polls for a matching window until timeout.
 - `window`
 - `attempts`
 
+## `browser_discover`
+
+### Inputs
+
+None.
+
+### Behavior
+
+Discovers the local browser state Saarthi currently supports:
+
+- Zen Flatpak availability (`app.zen_browser.zen`)
+- Firefox native availability
+- default desktop browser handlers
+- Zen and Firefox profile names/paths from `profiles.ini`
+- currently running Zen windows
+
+This is a read-only inventory tool; it does not create profiles or launch a browser.
+
+## `browser_focus`
+
+### Inputs
+
+- `titleContains?: string`
+- `includeHidden?: boolean` (default `false`)
+
+### Behavior
+
+Finds the best existing Zen window (`zen` / `app.zen_browser.zen`) and focuses it.
+If `titleContains` is provided, only matching Zen window titles are considered.
+
+## `browser_open_url`
+
+### Inputs
+
+- `url: string`
+- `reuseExisting?: boolean` (default `false`)
+- `titleContains?: string`
+- `timeoutMs?: number` (default `12000`)
+- `pollMs?: number` (default `200`)
+
+### Behavior
+
+Opens an allowed URL in the local Zen Flatpak browser.
+
+- Allowed URLs: `http:`, `https:`, `about:home`, `about:blank`
+- Rejected URLs: `file:`, `mailto:`, custom schemes, relative URLs, URLs with credentials
+- `reuseExisting=false`: launches Zen with `--new-window`
+- `reuseExisting=true`: focuses a matching existing Zen window when available and opens the URL with `--new-tab`; otherwise falls back to `--new-window`
+
+The launch is Zen-first and uses structured process arguments rather than raw shell interpolation. The tool still requires the `zen` launch alias to be allowed by policy, validates Zen availability through the launch policy, and enforces the shared launch rate limit.
+
+### Structured output
+
+- `opened`
+- `browser`
+- `url`
+- `mode`
+- `window`
+- `attempts`
+- `wasNewWindow`
+
 ## `app_launch_and_wait`
 
 ### Inputs

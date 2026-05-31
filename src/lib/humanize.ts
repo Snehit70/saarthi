@@ -52,6 +52,21 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
       const app = str(args, "appName") ?? str(args, "command");
       return app ? `Launching ${app}` : "Launching app";
     }
+    case "browser_discover":
+      return "Discovering browsers";
+    case "browser_focus":
+      return "Focusing Zen";
+    case "browser_open_url": {
+      const url = str(args, "url");
+      if (!url) return "Opening URL in Zen";
+      try {
+        const parsed = new URL(url);
+        const target = parsed.protocol === "about:" ? url : parsed.hostname;
+        return `Opening ${target} in Zen`;
+      } catch {
+        return "Opening URL in Zen";
+      }
+    }
     case "window_focus":
     case "window_focus_best":
       return "Focusing window";

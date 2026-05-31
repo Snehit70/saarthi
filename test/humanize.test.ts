@@ -23,6 +23,7 @@ describe("humanizeAction", () => {
   it("names launches by app", () => {
     expect(humanizeAction("app_launch", { appName: "zen" })).toBe("Launching zen");
     expect(humanizeAction("app_launch_and_wait", { command: "kitty" })).toBe("Launching kitty");
+    expect(humanizeAction("browser_open_url", { url: "https://web.whatsapp.com/" })).toBe("Opening web.whatsapp.com in Zen");
   });
 
   it("uses action_step label when present", () => {
