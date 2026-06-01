@@ -35,6 +35,16 @@ rm -f ~/.config/systemd/user/saarthi-mcp.service
 systemctl --user daemon-reload
 ```
 
+## Task Lifecycle (Overlay)
+
+Bookend every desktop task so the eyes HUD reflects reality:
+
+- **`overlay_task_start`** once, with a short human label, before the first desktop action.
+- **`overlay_task_complete`** when the task is finished — `done`, `error`, or `timeout`. This is mandatory teardown, not optional: call it before you hand the turn back, even on failure or when you stop to ask the user a question and do not expect to continue this task.
+- **`overlay_task_ping`** with `state: "waiting"` (or `dormant_waiting`) when you pause mid-task expecting to resume — e.g. waiting on a long load or a one-word user confirmation — so the HUD stays present without looking stuck.
+
+The overlay self-heals if you forget (an idle watchdog hides a task that stops updating, and the server stamps a terminal snapshot on shutdown), but that is a safety net with a multi-minute delay. Always close the task explicitly so the HUD settles immediately.
+
 ## Core Rule
 
 Every meaningful action must be grounded in the current screen:
