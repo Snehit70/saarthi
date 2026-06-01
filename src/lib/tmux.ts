@@ -331,7 +331,6 @@ export async function runCommand(
   await runTmux(["send-keys", "-t", pane.target, "-l", "--", wrapped]);
   await runTmux(["send-keys", "-t", pane.target, "Enter"]);
 
-  let interrupted = false;
   while (Date.now() - started < timeoutMs) {
     await sleep(pollMs);
     const buf = await capturePane(pane.target, { scrollback });
@@ -353,7 +352,6 @@ export async function runCommand(
 
   // Timed out: interrupt the command we started, then return the tail.
   await runTmux(["send-keys", "-t", pane.target, "C-c"]).catch(() => undefined);
-  interrupted = true;
   const tail = await capturePane(pane.target, { scrollback, lines: opts.maxOutputLines ?? 60 });
   return {
     target: pane.target,
@@ -362,7 +360,7 @@ export async function runCommand(
     exitCode: null,
     output: tail,
     timedOut: true,
-    interrupted,
+    interrupted: true,
     durationMs: Date.now() - started,
   };
 }
