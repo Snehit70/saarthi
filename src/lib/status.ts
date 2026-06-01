@@ -87,13 +87,20 @@ function blankStats(): TaskStats {
   return { steps: 0, reads: 0, acts: 0, errors: 0, retries: 0 };
 }
 
-function ensureTask(label = "desktop task"): Task {
-  if (task && task.state !== "complete" && task.state !== "error" && task.state !== "timeout") {
-    return task;
-  }
+function isActive(t: Task | null): t is Task {
+  return t !== null && t.state !== "complete" && t.state !== "error" && t.state !== "timeout";
+}
+
+function clearSteps(): void {
+  recent.length = 0;
+  running.clear();
+}
+
+/** Build a brand-new task in its starting (waiting, no steps) state. */
+function freshTask(label: string): Task {
   const id = makeTaskId();
   const ts = nowIso();
-  task = {
+  return {
     id,
     label,
     state: "waiting",
@@ -103,8 +110,13 @@ function ensureTask(label = "desktop task"): Task {
     seed: makeTaskSeed(`${sessionId()}:${id}:${label}`),
     stats: blankStats(),
   };
-  recent.length = 0;
-  running.clear();
+}
+
+/** Return the live task, or start a fresh one when none is active. */
+function ensureTask(label = "desktop task"): Task {
+  if (isActive(task)) return task;
+  task = freshTask(label);
+  clearSteps();
   return task;
 }
 
@@ -117,8 +129,7 @@ function currentStep(): Step | null {
 }
 
 function topLevelState(): "active" | "idle" {
-  if (!task) return "idle";
-  return task.state === "complete" || task.state === "error" || task.state === "timeout" ? "idle" : "active";
+  return isActive(task) ? "active" : "idle";
 }
 
 async function writeSnapshot(snapshot: StatusSnapshot): Promise<void> {
@@ -157,17 +168,11 @@ function flush(): void {
 }
 
 export function startTask(label = "desktop task"): Task {
-  const next = ensureTask(label);
-  const ts = nowIso();
-  next.label = label;
-  next.state = "waiting";
-  next.updatedAt = ts;
-  next.completedAt = null;
-  next.stats = blankStats();
-  recent.length = 0;
-  running.clear();
+  // An explicit start always begins a clean task, even if one was mid-flight.
+  task = freshTask(label);
+  clearSteps();
   void flush();
-  return next;
+  return task;
 }
 
 export function pingTask(state: Extract<TaskState, "waiting" | "dormant_waiting"> = "waiting"): Task {
@@ -218,11 +223,10 @@ export function recordStepDone(id: number, ok: boolean): void {
   const step = recent.find((s) => s.id === id);
   if (step) step.state = ok ? "done" : "error";
   running.delete(id);
-  if (task && task.state !== "complete" && task.state !== "error" && task.state !== "timeout") {
-    const ts = nowIso();
+  if (isActive(task)) {
     if (!ok) task.stats.errors += 1;
     task.state = running.size > 0 ? "working" : "waiting";
-    task.updatedAt = ts;
+    task.updatedAt = nowIso();
   }
   void flush();
 }
