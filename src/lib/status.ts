@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -192,6 +193,38 @@ export function completeTask(status: TaskCompleteStatus = "done"): Task {
   running.clear();
   void flush();
   return activeTask;
+}
+
+/**
+ * Best-effort synchronous cleanup for process shutdown. Async flushes can't
+ * settle before process.exit, so on exit we stamp a terminal snapshot
+ * synchronously: any in-flight task is marked complete so the overlay settles
+ * and hides instead of freezing on the last "working" state forever.
+ */
+export function flushIdleSync(): void {
+  if (!ENABLED) return;
+  try {
+    if (isActive(task)) {
+      const ts = nowIso();
+      task.state = "complete";
+      task.updatedAt = ts;
+      task.completedAt = ts;
+    }
+    running.clear();
+    mkdirSync(dirname(STATUS_PATH), { recursive: true });
+    const snapshot: StatusSnapshot = {
+      schema: 2,
+      sessionId: sessionId(),
+      state: "idle",
+      updatedAt: nowIso(),
+      task: task ? { ...task, stats: { ...task.stats } } : null,
+      current: null,
+      recent: recent.slice(),
+    };
+    writeFileSync(STATUS_PATH, JSON.stringify(snapshot), "utf8");
+  } catch {
+    // best-effort; the overlay self-heals via its inactivity watchdog regardless
+  }
 }
 
 /** Record that a tool call has started. Returns the step id for completion. */

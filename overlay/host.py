@@ -14,6 +14,7 @@ Run:  python3 overlay/host.py          (live, follows status.json)
       python3 overlay/host.py --demo    (built-in animation, no saarthi needed)
 """
 
+import copy
 import json
 import os
 import sys
@@ -201,18 +202,24 @@ class Overlay:
         self._schedule_wait_timers(snap)
 
     def _schedule_wait_timers(self, snap):
+        # Arm an inactivity watchdog anchored on the task's updatedAt. Every fresh
+        # snapshot cancels and re-arms it, so an actively-updating task never fires;
+        # but a task whose writer has gone silent — a dead MCP process, or a step
+        # that leaked in the "running" set and pinned the state to "working" — still
+        # self-heals and hides after HARD_TIMEOUT_MS of no updates. Previously a
+        # "working" task armed no timer at all and could linger forever.
         self._cancel_wait_timers()
         task = snap.get("task") or {}
         state = task.get("state")
-        if state == "working":
-            return
 
         updated_at = task.get("updatedAt") or snap.get("updatedAt")
         elapsed_ms = self._elapsed_ms(updated_at)
-        soft_in = max(0, SOFT_WAIT_MS - elapsed_ms)
         hard_in = max(0, HARD_TIMEOUT_MS - elapsed_ms)
 
+        # Only an explicitly-waiting task fades to the dormant look; a "working"
+        # task that simply stopped updating is caught by the hard watchdog below.
         if state == "waiting":
+            soft_in = max(0, SOFT_WAIT_MS - elapsed_ms)
             self.soft_wait_source = GLib.timeout_add(soft_in, self._mark_dormant_waiting)
         self.hard_timeout_source = GLib.timeout_add(hard_in, self._mark_timeout)
 
@@ -229,10 +236,12 @@ class Overlay:
             return 0
 
     def _mark_dormant_waiting(self):
+        # Synthesize an updated snapshot and re-push it; _push re-enters the v2
+        # lifecycle, which is intentional (it reschedules the hard-timeout timer).
         self.soft_wait_source = None
         if not self.last_snap:
             return False
-        snap = json.loads(json.dumps(self.last_snap))
+        snap = copy.deepcopy(self.last_snap)
         task = snap.get("task")
         if not task or task.get("state") != "waiting":
             return False
@@ -245,7 +254,7 @@ class Overlay:
         self.hard_timeout_source = None
         if not self.last_snap:
             return False
-        snap = json.loads(json.dumps(self.last_snap))
+        snap = copy.deepcopy(self.last_snap)
         task = snap.get("task")
         if not task or task.get("state") in ("complete", "error", "timeout"):
             return False

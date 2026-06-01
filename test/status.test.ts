@@ -112,4 +112,16 @@ describe("status feed", () => {
       expect(s.task.state).toBe("timeout");
     });
   });
+
+  it("settles an in-flight task to a terminal snapshot on shutdown flush", async () => {
+    status.startTask("interrupted task");
+    status.recordStepStart("mouse_click", "act", "Clicking");
+    // Leave the step un-done, mimicking a process that dies mid-tool-call.
+    status.flushIdleSync();
+    const s = await readSnap();
+    expect(s.state).toBe("idle");
+    expect(s.task.state).toBe("complete");
+    expect(s.task.completedAt).toBeTruthy();
+    expect(s.current).toBeNull();
+  });
 });
