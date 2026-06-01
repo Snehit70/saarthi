@@ -8,6 +8,25 @@ import { readJsonl } from "../lib/util.js";
 import { server } from "../server.js";
 import { auditLogPath, runLogPath, SESSION_ID } from "../runtime.js";
 
+type LogEvent = Record<string, unknown>;
+
+/** Keep events at or after the lower bound; events without a usable bound or timestamp pass. */
+function afterSince(ts: number, sinceTs: number | null): boolean {
+  if (sinceTs === null || !Number.isFinite(sinceTs) || !Number.isFinite(ts)) return true;
+  return ts >= sinceTs;
+}
+
+/** Match an event to the selected session, optionally letting legacy (sessionId-less) rows through. */
+function matchesSession(eventSessionId: unknown, selectedSession: string | null, includeLegacy: boolean): boolean {
+  if (!selectedSession) return true;
+  if (eventSessionId === selectedSession) return true;
+  return includeLegacy && (eventSessionId === undefined || eventSessionId === null || eventSessionId === "");
+}
+
+function parseTs(value: unknown): number {
+  return typeof value === "string" ? Date.parse(value) : NaN;
+}
+
 server.registerTool(
   "overlay_task_start",
   {
@@ -134,32 +153,12 @@ server.registerTool(
     const [auditEvents, runEvents] = await Promise.all([readJsonl(auditLogPath), readJsonl(runLogPath)]);
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
-    const filteredAudit = auditEvents.filter((e) => {
-      const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
-      if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession) {
-        if (e.sessionId !== selectedSession) {
-          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-            return false;
-          }
-        }
-      }
-      if (taskId && e.taskId && e.taskId !== taskId) return false;
-      return true;
-    });
-    const filteredRun = runEvents.filter((e) => {
-      const ts = typeof e.ts === "string" ? Date.parse(e.ts) : NaN;
-      if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession) {
-        if (e.sessionId !== selectedSession) {
-          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-            return false;
-          }
-        }
-      }
-      if (taskId && e.taskId && e.taskId !== taskId) return false;
-      return true;
-    });
+    const inWindow = (e: LogEvent, tsField: "timestamp" | "ts"): boolean =>
+      afterSince(parseTs(e[tsField]), sinceTs) &&
+      matchesSession(e.sessionId, selectedSession, includeLegacy) &&
+      !(taskId && e.taskId && e.taskId !== taskId);
+    const filteredAudit = auditEvents.filter((e) => inWindow(e, "timestamp"));
+    const filteredRun = runEvents.filter((e) => inWindow(e, "ts"));
     const merged = [
       ...filteredAudit.map((e) => ({ source: "audit", ts: String(e.timestamp ?? ""), event: e })),
       ...filteredRun.map((e) => ({ source: "run", ts: String(e.ts ?? ""), event: e })),
@@ -203,18 +202,7 @@ server.registerTool(
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
     const rows = auditEvents
-      .filter((e) => {
-        const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
-        if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-        if (selectedSession) {
-          if (e.sessionId !== selectedSession) {
-            if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-              return false;
-            }
-          }
-        }
-        return true;
-      })
+      .filter((e) => afterSince(parseTs(e.timestamp), sinceTs) && matchesSession(e.sessionId, selectedSession, includeLegacy))
       .slice(-lastN);
 
     const total = rows.length;
