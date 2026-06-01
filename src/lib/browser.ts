@@ -71,15 +71,6 @@ export interface ZenDeviceInfo {
     copyUrl: ZenShortcutInfo | null;
     compactModeToggle: ZenShortcutInfo | null;
   };
-  reliability: {
-    navigationDefault: "new-tab";
-    inPageTargeting: ["vimium-hints", "atspi", "ocr-grid"];
-    chromeTargeting: "urlbar-and-zen-shortcuts";
-    configurationPolicy: "read-only";
-    authStrategy: "reuse-existing-local-profile";
-    sessionState: "user-owned-cookies-localStorage-saved-passwords";
-    profileConcurrency: "do-not-start-independent-automation-against-same-profile";
-  };
 }
 
 export interface LocalBrowserDiscovery {
@@ -334,15 +325,6 @@ async function discoverZenDeviceInfo(profiles: BrowserProfileInfo[]): Promise<Ze
       pinTabToggle: findShortcut(shortcuts, ZEN_SHORTCUT_ACTIONS.pinTabToggle),
       copyUrl: findShortcut(shortcuts, ZEN_SHORTCUT_ACTIONS.copyUrl),
       compactModeToggle: findShortcut(shortcuts, ZEN_SHORTCUT_ACTIONS.compactModeToggle),
-    },
-    reliability: {
-      navigationDefault: "new-tab",
-      inPageTargeting: ["vimium-hints", "atspi", "ocr-grid"],
-      chromeTargeting: "urlbar-and-zen-shortcuts",
-      configurationPolicy: "read-only",
-      authStrategy: "reuse-existing-local-profile",
-      sessionState: "user-owned-cookies-localStorage-saved-passwords",
-      profileConcurrency: "do-not-start-independent-automation-against-same-profile",
     },
   };
 }

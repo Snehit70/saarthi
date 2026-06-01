@@ -241,7 +241,6 @@ Discovers the local browser state Saarthi currently supports:
   - public Firefox containers
   - visible active/disabled extensions plus known extension flags for Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit
   - configured Zen shortcuts for workspace forward/backward, pin-tab toggle, copy URL, and compact-mode toggle
-  - reliability/auth posture: reuse the existing local profile, preserve user-owned cookies/localStorage/saved-password state, and do not start independent automation against the same profile
 - currently running Zen windows
 
 This is a read-only inventory tool; it does not create profiles, change preferences, install extensions, or launch a browser.
