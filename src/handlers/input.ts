@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { audit } from "../lib/audit.js";
-import { getWindowOrThrow, hyprctlDispatch, HyprlandError } from "../lib/hyprland.js";
+import { focusWindow, getWindowOrThrow, HyprlandError, sendShortcut } from "../lib/hyprland.js";
 import type { WindowId } from "../lib/types.js";
 import { commandExists, sleep } from "../lib/util.js";
 import {
@@ -98,7 +98,7 @@ server.registerTool(
       throw new HyprlandError("INPUT_FAILED", "wtype is not installed");
     }
 
-    await hyprctlDispatch("focuswindow", `address:${windowId}`);
+    await focusWindow(windowId as WindowId);
     if (focusSettleMs > 0) await sleep(focusSettleMs);
 
     if (delayMs > 0) {
@@ -145,7 +145,7 @@ server.registerTool(
     const shortcutMods = toHyprShortcutMods(safeMods);
     const shortcutKey = toHyprShortcutKey(safeKey);
     for (let i = 0; i < repeat; i += 1) {
-      await hyprctlDispatch("sendshortcut", `${shortcutMods},${shortcutKey}`);
+      await sendShortcut(shortcutMods, shortcutKey);
       if (i < repeat - 1 && delayMs > 0) await sleep(delayMs);
     }
     return {

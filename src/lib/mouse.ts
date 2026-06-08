@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { HyprlandError, hyprctlDispatch, cursorPosition } from "./hyprland.js";
+import { HyprlandError, cursorPosition, moveCursor } from "./hyprland.js";
 import { commandExists, sleep } from "./util.js";
 
 const execFileAsync = promisify(execFile);
@@ -26,7 +26,7 @@ function easeInOut(t: number): number {
 }
 
 export async function performMouseMove(x: number, y: number): Promise<void> {
-  await hyprctlDispatch("movecursor", `${x} ${y}`);
+  await moveCursor(x, y);
 }
 
 /** Move the cursor from its current position to (x,y) along an eased path. */
@@ -45,7 +45,7 @@ export async function performEasedMove(x: number, y: number, steps: number, step
     const t = easeInOut(i / n);
     const px = Math.round(fromX + (x - fromX) * t);
     const py = Math.round(fromY + (y - fromY) * t);
-    await hyprctlDispatch("movecursor", `${px} ${py}`);
+    await moveCursor(px, py);
     if (stepDelayMs > 0 && i < n) await sleep(stepDelayMs);
   }
 }
@@ -87,7 +87,7 @@ export async function performMouseDrag(
     const t = easeInOut(i / n);
     const px = Math.round(fromX + (toX - fromX) * t);
     const py = Math.round(fromY + (toY - fromY) * t);
-    await hyprctlDispatch("movecursor", `${px} ${py}`);
+    await moveCursor(px, py);
     if (stepDelayMs > 0) await sleep(stepDelayMs);
   }
   if (settleMs > 0) await sleep(settleMs);

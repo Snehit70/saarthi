@@ -103,6 +103,87 @@ export async function hyprctlDispatch(dispatcher: string, params: string): Promi
   return stdout.trim();
 }
 
+function addressParam(windowId: WindowId): string {
+  return `address:${windowId}`;
+}
+
+export function focusWindowParams(windowId: WindowId): string {
+  return addressParam(windowId);
+}
+
+export function moveWindowParams(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): string {
+  return mode === "absolute" ? `exact ${x} ${y},${addressParam(windowId)}` : `${x} ${y},${addressParam(windowId)}`;
+}
+
+export function resizeWindowParams(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): string {
+  return mode === "absolute" ? `exact ${width} ${height},${addressParam(windowId)}` : `${width} ${height},${addressParam(windowId)}`;
+}
+
+export function sendWindowToWorkspaceParams(windowId: WindowId, workspace: string): string {
+  return `${workspace},${addressParam(windowId)}`;
+}
+
+export function sendShortcutParams(mods: string, key: string): string {
+  return mods ? `${mods},${key}` : key;
+}
+
+export function moveCursorParams(x: number, y: number): string {
+  return `${x} ${y}`;
+}
+
+export async function focusWindow(windowId: WindowId): Promise<string> {
+  return hyprctlDispatch("focuswindow", focusWindowParams(windowId));
+}
+
+export async function switchWorkspace(workspace: string): Promise<string> {
+  return hyprctlDispatch("workspace", workspace);
+}
+
+export function workspaceNeedsSwitch(currentWorkspace: string | null, targetWorkspace: string | null | undefined): targetWorkspace is string {
+  return Boolean(currentWorkspace && targetWorkspace && currentWorkspace !== targetWorkspace);
+}
+
+export async function switchWorkspaceIfNeeded(currentWorkspace: string | null, targetWorkspace: string | null | undefined): Promise<boolean> {
+  if (!workspaceNeedsSwitch(currentWorkspace, targetWorkspace)) return false;
+  await switchWorkspace(targetWorkspace);
+  return true;
+}
+
+export async function restoreWorkspaceIfNeeded(originalWorkspace: string | null, transientWorkspace: string | null | undefined): Promise<void> {
+  if (!workspaceNeedsSwitch(originalWorkspace, transientWorkspace)) return;
+  const restoreTo = originalWorkspace;
+  if (!restoreTo) return;
+  try {
+    await switchWorkspace(restoreTo);
+  } catch {
+    // Preserve the caller's main outcome even if cleanup fails.
+  }
+}
+
+export async function launchApp(command: string): Promise<string> {
+  return hyprctlDispatch("exec", command);
+}
+
+export async function moveWindow(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): Promise<string> {
+  return hyprctlDispatch("movewindowpixel", moveWindowParams(windowId, mode, x, y));
+}
+
+export async function resizeWindow(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): Promise<string> {
+  return hyprctlDispatch("resizewindowpixel", resizeWindowParams(windowId, mode, width, height));
+}
+
+export async function sendWindowToWorkspace(windowId: WindowId, workspace: string): Promise<string> {
+  return hyprctlDispatch("movetoworkspace", sendWindowToWorkspaceParams(windowId, workspace));
+}
+
+export async function sendShortcut(mods: string, key: string): Promise<string> {
+  return hyprctlDispatch("sendshortcut", sendShortcutParams(mods, key));
+}
+
+export async function moveCursor(x: number, y: number): Promise<string> {
+  return hyprctlDispatch("movecursor", moveCursorParams(x, y));
+}
+
 export async function listMonitors(): Promise<MonitorInfo[]> {
   const monitors = await hyprctlJson<Array<Record<string, unknown>>>(["monitors"]);
   return monitors.map((m) => ({

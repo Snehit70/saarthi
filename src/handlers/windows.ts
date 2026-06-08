@@ -5,13 +5,19 @@ import {
   clampAbsoluteSizeToMonitor,
   clampMoveResize,
   filterWindowsByQuery,
+  focusWindow,
   focusedWorkspaceName,
   getWindowOrThrow,
-  hyprctlDispatch,
   HyprlandError,
   listMonitors,
   listWindows,
+  moveWindow,
   monitorForWindow,
+  resizeWindow,
+  sendWindowToWorkspace,
+  moveWindowParams,
+  resizeWindowParams,
+  sendWindowToWorkspaceParams,
 } from "../lib/hyprland.js";
 import type { WindowId } from "../lib/types.js";
 import { toNumberOrNull } from "../lib/util.js";
@@ -201,7 +207,7 @@ server.registerTool(
         },
       };
     }
-    await hyprctlDispatch("focuswindow", `address:${best.window.id}`);
+    await focusWindow(best.window.id);
     return {
       content: [{ type: "text", text: JSON.stringify({ focused: true, window: best.window, score: best.score }, null, 2) }],
       structuredContent: {
@@ -316,7 +322,7 @@ server.registerTool(
       };
     }
 
-    const output = await hyprctlDispatch("focuswindow", `address:${windowId}`);
+    const output = await focusWindow(windowId as WindowId);
     return { content: [{ type: "text", text: output || "ok" }] };
   },
 );
@@ -357,7 +363,7 @@ server.registerTool(
       yy = clampMoveResize(y);
     }
 
-    const params = mode === "absolute" ? `exact ${xx} ${yy},address:${windowId}` : `${xx} ${yy},address:${windowId}`;
+    const params = moveWindowParams(windowId as WindowId, mode, xx, yy);
 
     await audit("window_move", { windowId, mode, x: xx, y: yy }, dryRun);
 
@@ -365,7 +371,7 @@ server.registerTool(
       return { content: [{ type: "text", text: `DRY_RUN movewindowpixel ${params}` }] };
     }
 
-    const output = await hyprctlDispatch("movewindowpixel", params);
+    const output = await moveWindow(windowId as WindowId, mode, xx, yy);
     return { content: [{ type: "text", text: output || "ok" }] };
   },
 );
@@ -406,7 +412,7 @@ server.registerTool(
       h = clampMoveResize(height, 1, 10000);
     }
 
-    const params = mode === "absolute" ? `exact ${w} ${h},address:${windowId}` : `${w} ${h},address:${windowId}`;
+    const params = resizeWindowParams(windowId as WindowId, mode, w, h);
 
     await audit("window_resize", { windowId, mode, width: w, height: h }, dryRun);
 
@@ -414,7 +420,7 @@ server.registerTool(
       return { content: [{ type: "text", text: `DRY_RUN resizewindowpixel ${params}` }] };
     }
 
-    const output = await hyprctlDispatch("resizewindowpixel", params);
+    const output = await resizeWindow(windowId as WindowId, mode, w, h);
     return { content: [{ type: "text", text: output || "ok" }] };
   },
 );
@@ -437,7 +443,7 @@ server.registerTool(
   },
   async ({ windowId, workspace }) => {
     await getWindowOrThrow(windowId as WindowId);
-    const params = `${workspace},address:${windowId}`;
+    const params = sendWindowToWorkspaceParams(windowId as WindowId, workspace);
 
     await audit("window_send_to_workspace", { windowId, workspace }, dryRun);
 
@@ -445,7 +451,7 @@ server.registerTool(
       return { content: [{ type: "text", text: `DRY_RUN movetoworkspace ${params}` }] };
     }
 
-    const output = await hyprctlDispatch("movetoworkspace", params);
+    const output = await sendWindowToWorkspace(windowId as WindowId, workspace);
     return { content: [{ type: "text", text: output || "ok" }] };
   },
 );

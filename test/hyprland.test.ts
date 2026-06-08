@@ -6,7 +6,14 @@ import {
   filterWindowsByQuery,
   formatError,
   HyprlandError,
+  focusWindowParams,
+  moveCursorParams,
+  moveWindowParams,
   pickFirstEmptyWorkspace,
+  resizeWindowParams,
+  sendShortcutParams,
+  sendWindowToWorkspaceParams,
+  workspaceNeedsSwitch,
 } from "../src/lib/hyprland.js";
 import type { MonitorInfo, WindowInfo } from "../src/lib/types.js";
 
@@ -54,6 +61,32 @@ describe("formatError", () => {
 
   it("formats plain Error without code", () => {
     expect(formatError(new Error("boom"))).toBe("boom");
+  });
+});
+
+describe("dispatch parameter builders", () => {
+  it("formats address-targeted window dispatch params centrally", () => {
+    expect(focusWindowParams("0xabc")).toBe("address:0xabc");
+    expect(moveWindowParams("0xabc", "absolute", 10, 20)).toBe("exact 10 20,address:0xabc");
+    expect(moveWindowParams("0xabc", "delta", -5, 8)).toBe("-5 8,address:0xabc");
+    expect(resizeWindowParams("0xabc", "absolute", 800, 600)).toBe("exact 800 600,address:0xabc");
+    expect(resizeWindowParams("0xabc", "delta", 40, -20)).toBe("40 -20,address:0xabc");
+    expect(sendWindowToWorkspaceParams("0xabc", "7")).toBe("7,address:0xabc");
+  });
+
+  it("normalizes shortcut and cursor params without handler-specific string glue", () => {
+    expect(sendShortcutParams("CTRL SHIFT", "L")).toBe("CTRL SHIFT,L");
+    expect(sendShortcutParams("", "RETURN")).toBe("RETURN");
+    expect(moveCursorParams(120, 300)).toBe("120 300");
+  });
+});
+
+describe("workspace switching helpers", () => {
+  it("switches only when both workspaces exist and differ", () => {
+    expect(workspaceNeedsSwitch("1", "2")).toBe(true);
+    expect(workspaceNeedsSwitch("1", "1")).toBe(false);
+    expect(workspaceNeedsSwitch(null, "2")).toBe(false);
+    expect(workspaceNeedsSwitch("1", null)).toBe(false);
   });
 });
 
