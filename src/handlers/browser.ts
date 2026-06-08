@@ -1,48 +1,27 @@
 import { z } from "zod";
 import { audit } from "../lib/audit.js";
 import {
+  defaultReadinessMode,
   discoverLocalBrowsers,
+  focusZenWindow,
+  openZenUrl,
   requireZenShortcut,
   shortcutToHypr,
-  spawnZen,
   typeWithWtype,
   validateBrowserUrl,
-  waitForZenReadiness,
-  waitForZenWindowAfterLaunch,
   ZEN_LAUNCH_COMMAND,
   zenWindows,
-  type BrowserReadinessMode,
+  type BrowserOpenMode,
 } from "../lib/browser.js";
-import { hyprctlDispatch, HyprlandError, listWindows } from "../lib/hyprland.js";
-import type { WindowInfo } from "../lib/types.js";
+import { focusWindow, HyprlandError, listWindows, sendShortcut } from "../lib/hyprland.js";
 import { isLaunchCommandAvailable } from "../lib/apps.js";
 import { sanitizeTypedText } from "../lib/input.js";
 import { server } from "../server.js";
 import { assertLaunchRateLimit, dryRun, policy } from "../runtime.js";
 
-type BrowserOpenMode = "new-tab" | "new-window" | "current-tab";
 type BrowserGatedAction = "read" | "navigate" | "type-field" | "send" | "commit-submit" | "destructive" | "payment";
 
 const GATED_BROWSER_ACTIONS = new Set<BrowserGatedAction>(["send", "commit-submit", "destructive", "payment"]);
-
-async function focusZenWindow(args: { windowId?: string; titleContains?: string; includeHidden?: boolean }): Promise<ReturnType<typeof zenWindows>[number]> {
-  const matches = zenWindows(await listWindows({ includeHidden: args.includeHidden ?? false }), args.titleContains);
-  const best = args.windowId ? matches.find((window) => window.id === args.windowId) : matches[0];
-  if (!best) {
-    throw new HyprlandError("WINDOW_NOT_FOUND", args.windowId ? `Zen window not found: ${args.windowId}` : "No Zen window found");
-  }
-  if (!dryRun) await hyprctlDispatch("focuswindow", `address:${best.id}`);
-  return best;
-}
-
-async function sendShortcut(mods: string, key: string): Promise<void> {
-  await hyprctlDispatch("sendshortcut", `${mods},${key}`);
-}
-
-function defaultReadinessMode(url: string, requested?: BrowserReadinessMode): BrowserReadinessMode {
-  if (requested) return requested;
-  return url.startsWith("about:") ? "none" : "title-change";
-}
 
 server.registerTool(
   "browser_discover",
@@ -83,22 +62,20 @@ server.registerTool(
     },
   },
   async ({ titleContains, includeHidden }) => {
-    const matches = zenWindows(await listWindows({ includeHidden }), titleContains);
-    if (matches.length === 0) {
-      throw new HyprlandError("WINDOW_NOT_FOUND", titleContains ? `No Zen window matched title: ${titleContains}` : "No Zen window found");
-    }
-    const best = matches[0];
+    const windows = await listWindows({ includeHidden });
+    const candidates = zenWindows(windows, titleContains);
+    const best = await focusZenWindow(windows, { titleContains, includeHidden }, false);
     await audit("browser_focus", { titleContains: titleContains ?? null, includeHidden, windowId: best.id }, dryRun);
     if (dryRun) {
       return {
         content: [{ type: "text", text: `DRY_RUN focus Zen window ${best.id}` }],
-        structuredContent: { focused: false, window: best, candidates: matches },
+        structuredContent: { focused: false, window: best, candidates },
       };
     }
-    await hyprctlDispatch("focuswindow", `address:${best.id}`);
+    await focusWindow(best.id);
     return {
       content: [{ type: "text", text: JSON.stringify({ focused: true, window: best }, null, 2) }],
-      structuredContent: { focused: true, window: best, candidates: matches },
+      structuredContent: { focused: true, window: best, candidates },
     };
   },
 );
@@ -150,37 +127,36 @@ server.registerTool(
     }
     assertLaunchRateLimit();
 
-    const beforeWindows = await listWindows({ includeHidden: false });
-    const baselineIds = new Set(beforeWindows.map((window) => window.id));
-    const reusable = requestedMode !== "new-window" ? zenWindows(beforeWindows, titleContains)[0] ?? null : null;
-    // Honest reporting: a deliberate new-window stays "new-window"; only the
-    // no-Zen-window-existed case is a fallback.
-    const effectiveMode: BrowserOpenMode | "new-window-fallback" = reusable
-      ? requestedMode
-      : requestedMode === "new-window"
-        ? "new-window"
-        : "new-window-fallback";
-    const payload = {
-      browser: "zen-flatpak",
-      command: ZEN_LAUNCH_COMMAND,
-      url: normalizedUrl,
-      mode: requestedMode,
-      effectiveMode,
-      reuseExisting: reuseExisting ?? null,
-      titleContains: titleContains ?? null,
-      reusedWindowId: reusable?.id ?? null,
-      currentTabReason: currentTabReason ?? null,
-      timeoutMs,
-      pollMs,
-      typeDelayMs,
-      readiness: readinessMode,
-      readyTitleContains: readyTitleContains ?? null,
-      readyTimeoutMs,
-      readyPollMs,
-    };
-
     try {
       if (dryRun) {
+        const dryWindows = await listWindows({ includeHidden: false });
+        const reusableWindow = requestedMode !== "new-window" ? await focusZenWindow(dryWindows, { titleContains }, false).catch((error: unknown) => {
+          if (error instanceof HyprlandError && error.code === "WINDOW_NOT_FOUND") return null;
+          throw error;
+        }) : null;
+        const effectiveMode: BrowserOpenMode | "new-window-fallback" = reusableWindow
+          ? requestedMode
+          : requestedMode === "new-window"
+            ? "new-window"
+            : "new-window-fallback";
+        const payload = {
+          browser: "zen-flatpak",
+          command: ZEN_LAUNCH_COMMAND,
+          url: normalizedUrl,
+          mode: requestedMode,
+          effectiveMode,
+          reuseExisting: reuseExisting ?? null,
+          titleContains: titleContains ?? null,
+          reusedWindowId: reusableWindow?.id ?? null,
+          currentTabReason: currentTabReason ?? null,
+          timeoutMs,
+          pollMs,
+          typeDelayMs,
+          readiness: readinessMode,
+          readyTitleContains: readyTitleContains ?? null,
+          readyTimeoutMs,
+          readyPollMs,
+        };
         await audit("browser_open_url", payload, dryRun, {
           requestId,
           result: "ok",
@@ -196,83 +172,100 @@ server.registerTool(
             url: normalizedUrl,
             mode: requestedMode,
             effectiveMode,
-            reusedWindow: reusable,
+            reusedWindow: reusableWindow,
             readiness: {
               ready: false,
               mode: readinessMode,
               reason: "dry-run",
-              titleBefore: reusable?.title ?? null,
-              titleAfter: reusable?.title ?? null,
+              titleBefore: reusableWindow?.title ?? null,
+              titleAfter: reusableWindow?.title ?? null,
             },
           },
         };
       }
-
-      // Acquire the target window via whichever navigation strategy applies,
-      // then run one shared readiness + audit + return tail.
-      const listLive = () => listWindows({ includeHidden: false });
-      let target: WindowInfo;
-      let attempts: number;
-      let wasNewWindow: boolean;
-      let titleBefore: string | null;
-
-      if (reusable) {
-        // Existing Zen window: drive navigation from the keyboard so pinned tabs
-        // and the current page survive (optional new tab, focus URL bar, type, go).
-        titleBefore = reusable.title;
-        await hyprctlDispatch("focuswindow", `address:${reusable.id}`);
-        if (requestedMode === "new-tab") await sendShortcut("CTRL", "T");
-        await sendShortcut("CTRL", "L");
-        await typeWithWtype(normalizedUrl, typeDelayMs);
-        await sendShortcut("", "RETURN");
-        target = reusable;
-        attempts = 1;
-        wasNewWindow = false;
-      } else {
-        // No reusable window: spawn a fresh Zen window and wait for it to appear.
-        titleBefore = null;
-        await spawnZen(normalizedUrl, "new-window");
-        const wait = await waitForZenWindowAfterLaunch({
-          baselineIds,
-          preferNewWindow: true,
-          titleContains,
-          timeoutMs,
-          pollMs,
-          listWindows: listLive,
-        });
-        if (!wait.window) {
-          throw new HyprlandError("WINDOW_NOT_FOUND", `Zen did not expose a matching window within ${timeoutMs}ms`);
-        }
-        await hyprctlDispatch("focuswindow", `address:${wait.window.id}`);
-        target = wait.window;
-        attempts = wait.attempts;
-        wasNewWindow = wait.wasNewWindow;
-      }
-
-      const ready = await waitForZenReadiness({
-        windowId: target.id,
-        titleBefore,
-        mode: readinessMode,
-        titleContains: readyTitleContains,
-        timeoutMs: readyTimeoutMs,
-        pollMs: readyPollMs,
-        listWindows: listLive,
+      const result = await openZenUrl({
+        url: normalizedUrl,
+        mode: requestedMode,
+        titleContains,
+        typeDelayMs,
+        timeoutMs,
+        pollMs,
+        readinessMode,
+        readyTitleContains,
+        readyTimeoutMs,
+        readyPollMs,
+        listWindows: () => listWindows({ includeHidden: false }),
       });
-      await audit("browser_open_url", { ...payload, windowId: target.id, attempts, wasNewWindow }, dryRun, {
+      const payload = {
+        browser: "zen-flatpak",
+        command: ZEN_LAUNCH_COMMAND,
+        url: normalizedUrl,
+        mode: requestedMode,
+        effectiveMode: result.effectiveMode,
+        reuseExisting: reuseExisting ?? null,
+        titleContains: titleContains ?? null,
+        reusedWindowId: result.reusableWindow?.id ?? null,
+        currentTabReason: currentTabReason ?? null,
+        timeoutMs,
+        pollMs,
+        typeDelayMs,
+        readiness: readinessMode,
+        readyTitleContains: readyTitleContains ?? null,
+        readyTimeoutMs,
+        readyPollMs,
+      };
+      await audit("browser_open_url", { ...payload, windowId: result.targetWindow.id, attempts: result.attempts, wasNewWindow: result.wasNewWindow }, dryRun, {
         requestId,
         result: "ok",
         errorCode: null,
         durationMs: Date.now() - started,
-        afterState: { readiness: ready },
+        afterState: { readiness: result.readiness },
       });
-      const result = { opened: true, browser: "zen-flatpak", url: normalizedUrl, mode: requestedMode, effectiveMode, window: ready.window, attempts, wasNewWindow, readiness: ready };
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            opened: true,
+            browser: "zen-flatpak",
+            url: normalizedUrl,
+            mode: requestedMode,
+            effectiveMode: result.effectiveMode,
+            window: result.readiness.window,
+            attempts: result.attempts,
+            wasNewWindow: result.wasNewWindow,
+            readiness: result.readiness,
+          }, null, 2),
+        }],
+        structuredContent: {
+          opened: true,
+          browser: "zen-flatpak",
+          url: normalizedUrl,
+          mode: requestedMode,
+          effectiveMode: result.effectiveMode,
+          window: result.readiness.window,
+          attempts: result.attempts,
+          wasNewWindow: result.wasNewWindow,
+          readiness: result.readiness,
+        },
       };
     } catch (err) {
       const errorCode = err instanceof HyprlandError ? err.code : "APP_LAUNCH_FAILED";
-      await audit("browser_open_url", payload, dryRun, {
+      await audit("browser_open_url", {
+        browser: "zen-flatpak",
+        command: ZEN_LAUNCH_COMMAND,
+        url: normalizedUrl,
+        mode: requestedMode,
+        reuseExisting: reuseExisting ?? null,
+        titleContains: titleContains ?? null,
+        currentTabReason: currentTabReason ?? null,
+        timeoutMs,
+        pollMs,
+        typeDelayMs,
+        readiness: readinessMode,
+        readyTitleContains: readyTitleContains ?? null,
+        readyTimeoutMs,
+        readyPollMs,
+      }, dryRun, {
         requestId,
         result: "error",
         errorCode,
@@ -317,7 +310,7 @@ server.registerTool(
     }
     const payload = { visibleTextLength: safeText.length, windowId: windowId ?? null, titleContains: titleContains ?? null, commit, actionKind, confirmed };
     try {
-      const window = await focusZenWindow({ windowId, titleContains });
+      const window = await focusZenWindow(await listWindows({ includeHidden: false }), { windowId, titleContains }, !dryRun);
       await audit("browser_vimium_hint", { ...payload, windowId: window.id }, dryRun, {
         requestId,
         result: "ok",
@@ -374,7 +367,7 @@ server.registerTool(
   async ({ direction, count, windowId, titleContains, settleMs }) => {
     const started = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const window = await focusZenWindow({ windowId, titleContains });
+    const window = await focusZenWindow(await listWindows({ includeHidden: false }), { windowId, titleContains }, !dryRun);
     const shortcut = await requireZenShortcut(direction === "forward" ? "workspaceForward" : "workspaceBackward");
     const hyprShortcut = shortcutToHypr(shortcut);
     const restoreDirection = direction === "forward" ? "backward" : "forward";
