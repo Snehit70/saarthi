@@ -14,6 +14,11 @@ mkdir -p "$TARGET_DIR"
 systemctl --user disable --now "$OLD_UNIT_NAME" || true
 rm -f "$OLD_TARGET_UNIT"
 
+# Drop any prior enablement links before reinstalling so target migrations
+# (for example default.target -> graphical-session.target) do not leave stale
+# symlinks behind.
+systemctl --user disable --now "$UNIT_NAME" || true
+
 install -m 0644 "$SOURCE_UNIT" "$TARGET_UNIT"
 
 systemctl --user daemon-reload

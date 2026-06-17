@@ -1,6 +1,7 @@
 [Unit]
 Description=Saarthi overlay HUD
 After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
@@ -14,4 +15,4 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
