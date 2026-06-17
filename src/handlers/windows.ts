@@ -16,7 +16,7 @@ import {
   resizeWindow,
   sendWindowToWorkspace,
   moveWindowParams,
-  resizeWindowParams,
+  resizeWindowExpression,
   sendWindowToWorkspaceParams,
 } from "../lib/hyprland.js";
 import type { WindowId } from "../lib/types.js";
@@ -412,12 +412,13 @@ server.registerTool(
       h = clampMoveResize(height, 1, 10000);
     }
 
-    const params = resizeWindowParams(windowId as WindowId, mode, w, h);
-
     await audit("window_resize", { windowId, mode, width: w, height: h }, dryRun);
 
     if (dryRun) {
-      return { content: [{ type: "text", text: `DRY_RUN resizewindowpixel ${params}` }] };
+      // For absolute mode, resizeWindow converts to delta at dispatch time (requires current window size).
+      // Show the Lua expression template so the dry-run message matches the actual dispatch path.
+      const expr = resizeWindowExpression(windowId as WindowId, mode, w, h);
+      return { content: [{ type: "text", text: `DRY_RUN dispatch ${expr}${mode === "absolute" ? " (delta computed from current window size at dispatch)" : ""}` }] };
     }
 
     const output = await resizeWindow(windowId as WindowId, mode, w, h);

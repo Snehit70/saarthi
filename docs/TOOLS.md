@@ -73,7 +73,6 @@ Set `includeLegacy=true` to also include legacy rows that have no `sessionId`.
 
 Exports merged audit + run trace events to a JSON file for later analysis.
 Session filtering is strict by default; `includeLegacy=true` also includes legacy rows without `sessionId`.
-  - `launchCommand`
 
 ## `desktop_health`
 

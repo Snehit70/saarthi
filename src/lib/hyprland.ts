@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 
 export type ErrorCode =
   | "NO_SOCKET"
+  | "DISPATCH_FAILED"
   | "PLATFORM_UNSUPPORTED"
   | "WINDOW_NOT_FOUND"
   | "WINDOW_NOT_ACTIONABLE"
@@ -102,7 +103,7 @@ export async function hyprctlDispatch(dispatcher: string, params: string): Promi
   }
   const output = stdout.trim();
   if (output.startsWith("error:")) {
-    throw new HyprlandError("NO_SOCKET", output);
+    throw new HyprlandError("DISPATCH_FAILED", output);
   }
   return output;
 }
@@ -117,7 +118,7 @@ async function hyprctlDispatchExpression(expression: string): Promise<string> {
   }
   const output = stdout.trim();
   if (output.startsWith("error:")) {
-    throw new HyprlandError("NO_SOCKET", output);
+    throw new HyprlandError("DISPATCH_FAILED", output);
   }
   return output;
 }
