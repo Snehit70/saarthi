@@ -596,9 +596,9 @@ Captures absolute rectangular region using `grim -g "<x>,<y> <width>x<height>"`.
 
 ### Behavior
 
-Validates actionable window, logs audit event, then runs:
+Validates actionable window, logs audit event, then dispatches through the Hyprland Lua API:
 
-- `hyprctl dispatch focuswindow address:<windowId>`
+- `hl.dsp.focus({ window = "address:<windowId>" })`
 
 ## `window_move`
 
@@ -614,10 +614,10 @@ Validates actionable window, logs audit event, then runs:
 - `delta`: values clamped/truncated via `clampMoveResize`.
 - `absolute`: values are clamped to the target window monitor bounds before dispatch.
 
-Dispatch:
+Dispatches through the Hyprland Lua API:
 
-- absolute: `hyprctl dispatch movewindowpixel exact <x> <y>,address:<id>`
-- delta: `hyprctl dispatch movewindowpixel <x> <y>,address:<id>`
+- absolute: `hl.dsp.window.move({ x = <x>, y = <y>, relative = false, window = "address:<id>" })`
+- delta: `hl.dsp.window.move({ x = <x>, y = <y>, relative = true, window = "address:<id>" })`
 
 ## `window_resize`
 
@@ -633,10 +633,10 @@ Dispatch:
 - `delta`: values clamped/truncated to `[1, 10000]`.
 - `absolute`: values clamped to target monitor dimensions.
 
-Dispatch:
+Dispatches through the Hyprland Lua API:
 
-- absolute: `hyprctl dispatch resizewindowpixel exact <w> <h>,address:<id>`
-- delta: `hyprctl dispatch resizewindowpixel <w> <h>,address:<id>`
+- absolute: reads the current window size, computes a delta, then uses the relative resize dispatcher.
+- delta: `hl.dsp.window.resize({ x = <w>, y = <h>, relative = true, window = "address:<id>" })`
 
 ## `workspace_focus`
 
@@ -648,7 +648,7 @@ Dispatch:
 
 Switches focused workspace:
 
-- `hyprctl dispatch workspace <workspace>`
+- `hl.dsp.focus({ workspace = "<workspace>" })`
 
 ## `window_send_to_workspace`
 
@@ -659,9 +659,9 @@ Switches focused workspace:
 
 ### Behavior
 
-Validates actionable window, logs audit event, runs:
+Validates actionable window, logs audit event, then dispatches through the Hyprland Lua API:
 
-- `hyprctl dispatch movetoworkspace <workspace>,address:<windowId>`
+- `hl.dsp.window.move({ workspace = "<workspace>", window = "address:<windowId>" })`
 
 ## Dry-run mode
 

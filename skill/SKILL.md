@@ -13,6 +13,11 @@ The Saarthi MCP server is stdio-only and belongs to the current MCP host/client
 session. Do not start or restart `saarthi-mcp.service`; if it exists, disable it.
 Use MCP tools directly after the client starts the stdio server.
 
+After changing and rebuilding the MCP server code, reconnect/restart the MCP
+client session that owns the stdio server. Existing `node dist/src/index.js`
+processes keep the old loaded modules until their client reconnects; rebuilding
+`dist` alone is not enough for already-connected tools.
+
 The eyes overlay HUD is the only persistent user service:
 
 ```bash
@@ -34,6 +39,20 @@ systemctl --user disable --now saarthi-mcp.service || true
 rm -f ~/.config/systemd/user/saarthi-mcp.service
 systemctl --user daemon-reload
 ```
+
+## Hyprland 0.55 Lua Dispatch
+
+This machine uses Hyprland 0.55+ Lua dispatcher semantics. Old split hyprctl
+forms such as `hyprctl dispatch workspace 1` can fail with Lua parse errors like
+`) expected near '1'`, often while still returning process exit code 0.
+
+When debugging or extending Saarthi dispatch behavior:
+
+- Keep Hyprland dispatcher construction centralized in `src/lib/hyprland.ts`.
+- Prefer MCP tools or the typed helper functions over handwritten `hyprctl dispatch ...` shell snippets.
+- Use Lua dispatcher expressions such as `hl.dsp.focus({ workspace = "1" })`, `hl.dsp.focus({ window = "address:0x..." })`, `hl.dsp.window.move(...)`, `hl.dsp.window.resize(...)`, `hl.dsp.cursor.move(...)`, and `hl.dsp.send_shortcut(...)`.
+- Treat `stdout` beginning with `error:` as a failure even if `hyprctl` exits 0.
+- For live validation, use no-op/current-state checks first: current workspace, active window, current position/size, and current cursor point.
 
 ## Task Lifecycle (Overlay)
 
