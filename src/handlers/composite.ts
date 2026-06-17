@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { audit } from "../lib/audit.js";
-import { formatError, hyprctlDispatch, HyprlandError } from "../lib/hyprland.js";
+import { formatError, HyprlandError, sendShortcut } from "../lib/hyprland.js";
 import { captureScreenshot } from "../lib/screenshot.js";
 import type { WindowId } from "../lib/types.js";
 import { commandExists, sleep } from "../lib/util.js";
@@ -227,7 +227,7 @@ server.registerTool(
           const modPart = toHyprShortcutMods(safeMods);
           const keyPart = toHyprShortcutKey(safeKey);
           for (let i = 0; i < args.repeat; i += 1) {
-            await hyprctlDispatch("sendshortcut", `${modPart}${modPart ? "," : ""}${keyPart}`);
+            await sendShortcut(modPart, keyPart);
             if (args.settleMs > 0 && i < args.repeat - 1) await sleep(args.settleMs);
           }
         }

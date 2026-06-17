@@ -92,6 +92,15 @@ async function main(): Promise<void> {
       "screenshot_compare",
       "ui_find",
       "ui_tree",
+      "browser_discover",
+      "browser_focus",
+      "browser_open_url",
+      "browser_vimium_hint",
+      "browser_space_step",
+      "tmux_list",
+      "tmux_capture",
+      "tmux_run_command",
+      "tmux_send_keys",
     ];
 
     for (const name of required) {

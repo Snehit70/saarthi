@@ -3,9 +3,108 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { audit } from "../lib/audit.js";
 import { healthCheck } from "../lib/hyprland.js";
+import { completeTask, pingTask, startTask } from "../lib/status.js";
 import { readJsonl } from "../lib/util.js";
 import { server } from "../server.js";
 import { auditLogPath, runLogPath, SESSION_ID } from "../runtime.js";
+
+type LogEvent = Record<string, unknown>;
+
+/** Keep events at or after the lower bound; events without a usable bound or timestamp pass. */
+function afterSince(ts: number, sinceTs: number | null): boolean {
+  if (sinceTs === null || !Number.isFinite(sinceTs) || !Number.isFinite(ts)) return true;
+  return ts >= sinceTs;
+}
+
+/** Match an event to the selected session, optionally letting legacy (sessionId-less) rows through. */
+function matchesSession(eventSessionId: unknown, selectedSession: string | null, includeLegacy: boolean): boolean {
+  if (!selectedSession) return true;
+  if (eventSessionId === selectedSession) return true;
+  return includeLegacy && (eventSessionId === undefined || eventSessionId === null || eventSessionId === "");
+}
+
+function parseTs(value: unknown): number {
+  return typeof value === "string" ? Date.parse(value) : NaN;
+}
+
+server.registerTool(
+  "overlay_task_start",
+  {
+    title: "Overlay Task Start",
+    description: "Mark the beginning of a user-visible Saarthi task so the overlay stays present between MCP calls.",
+    inputSchema: {
+      label: z.string().min(1).max(160).default("desktop task"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ label }) => {
+    const task = startTask(label);
+    await audit("overlay_task_start", { label, taskId: task.id }, false, { taskId: task.id, status: "started" });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ task }, null, 2) }],
+      structuredContent: { task },
+    };
+  },
+);
+
+server.registerTool(
+  "overlay_task_ping",
+  {
+    title: "Overlay Task Ping",
+    description: "Refresh the active overlay task and optionally move it into a waiting display state.",
+    inputSchema: {
+      state: z.enum(["waiting", "dormant_waiting"]).default("waiting"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ state }) => {
+    const task = pingTask(state);
+    await audit("overlay_task_ping", { state, taskId: task.id }, false, { taskId: task.id, status: "completed" });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ task }, null, 2) }],
+      structuredContent: { task },
+    };
+  },
+);
+
+server.registerTool(
+  "overlay_task_complete",
+  {
+    title: "Overlay Task Complete",
+    description: "Mark the active overlay task complete, errored, or timed out so the HUD can settle and hide.",
+    inputSchema: {
+      status: z.enum(["done", "error", "timeout"]).default("done"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  async ({ status }) => {
+    const task = completeTask(status);
+    await audit("overlay_task_complete", { status, taskId: task.id }, false, {
+      taskId: task.id,
+      status: status === "error" ? "error" : "completed",
+      result: status === "error" ? "error" : "ok",
+    });
+    return {
+      content: [{ type: "text", text: JSON.stringify({ task }, null, 2) }],
+      structuredContent: { task },
+    };
+  },
+);
 
 server.registerTool(
   "desktop_health",
@@ -54,32 +153,12 @@ server.registerTool(
     const [auditEvents, runEvents] = await Promise.all([readJsonl(auditLogPath), readJsonl(runLogPath)]);
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
-    const filteredAudit = auditEvents.filter((e) => {
-      const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
-      if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession) {
-        if (e.sessionId !== selectedSession) {
-          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-            return false;
-          }
-        }
-      }
-      if (taskId && e.taskId && e.taskId !== taskId) return false;
-      return true;
-    });
-    const filteredRun = runEvents.filter((e) => {
-      const ts = typeof e.ts === "string" ? Date.parse(e.ts) : NaN;
-      if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-      if (selectedSession) {
-        if (e.sessionId !== selectedSession) {
-          if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-            return false;
-          }
-        }
-      }
-      if (taskId && e.taskId && e.taskId !== taskId) return false;
-      return true;
-    });
+    const inWindow = (e: LogEvent, tsField: "timestamp" | "ts"): boolean =>
+      afterSince(parseTs(e[tsField]), sinceTs) &&
+      matchesSession(e.sessionId, selectedSession, includeLegacy) &&
+      !(taskId && e.taskId && e.taskId !== taskId);
+    const filteredAudit = auditEvents.filter((e) => inWindow(e, "timestamp"));
+    const filteredRun = runEvents.filter((e) => inWindow(e, "ts"));
     const merged = [
       ...filteredAudit.map((e) => ({ source: "audit", ts: String(e.timestamp ?? ""), event: e })),
       ...filteredRun.map((e) => ({ source: "run", ts: String(e.ts ?? ""), event: e })),
@@ -123,18 +202,7 @@ server.registerTool(
     const sinceTs = sinceIso ? Date.parse(sinceIso) : null;
     const selectedSession = sessionId ?? SESSION_ID;
     const rows = auditEvents
-      .filter((e) => {
-        const ts = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : NaN;
-        if (Number.isFinite(sinceTs) && Number.isFinite(ts) && ts < (sinceTs as number)) return false;
-        if (selectedSession) {
-          if (e.sessionId !== selectedSession) {
-            if (!(includeLegacy && (e.sessionId === undefined || e.sessionId === null || e.sessionId === ""))) {
-              return false;
-            }
-          }
-        }
-        return true;
-      })
+      .filter((e) => afterSince(parseTs(e.timestamp), sinceTs) && matchesSession(e.sessionId, selectedSession, includeLegacy))
       .slice(-lastN);
 
     const total = rows.length;

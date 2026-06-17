@@ -1,10 +1,13 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { formatError } from "./lib/hyprland.js";
+import { flushIdleSync } from "./lib/status.js";
 import { server } from "./server.js";
 import "./runtime.js";
 import "./handlers/windows.js";
 import "./handlers/workspaces.js";
 import "./handlers/apps.js";
+import "./handlers/browser.js";
+import "./handlers/tmux.js";
 import "./handlers/screenshots.js";
 import "./handlers/input.js";
 import "./handlers/mouse.js";
@@ -26,5 +29,9 @@ main().catch((error: unknown) => {
   process.exit(1);
 });
 
+// Settle the overlay on the way out: signal handlers route through process.exit,
+// and the "exit" handler does the actual synchronous status flush so it also
+// covers a natural exit when the stdio transport closes.
+process.on("exit", () => flushIdleSync());
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));

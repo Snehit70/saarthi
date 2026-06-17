@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { emitActive, emitDone } from "./lib/status.js";
+import { recordStepDone, recordStepStart } from "./lib/status.js";
 import { humanizeAction } from "./lib/humanize.js";
 
 export const server = new McpServer({
@@ -19,15 +19,18 @@ const REDACT_TYPED = process.env.SAARTHI_REDACT_TYPED === "1";
 const originalRegisterTool = server.registerTool.bind(server);
 
 server.registerTool = ((name: string, config: any, handler: (...handlerArgs: any[]) => any) => {
+  if (name.startsWith("overlay_task_")) {
+    return (originalRegisterTool as any)(name, config, handler);
+  }
   const kind = config?.annotations?.readOnlyHint === true ? "read" : "act";
   const wrapped = async (...handlerArgs: any[]) => {
-    const id = emitActive(name, kind, humanizeAction(name, handlerArgs[0], { redactText: REDACT_TYPED }));
+    const id = recordStepStart(name, kind, humanizeAction(name, handlerArgs[0], { redactText: REDACT_TYPED }));
     try {
       const result = await handler(...handlerArgs);
-      emitDone(id, true);
+      recordStepDone(id, true);
       return result;
     } catch (error) {
-      emitDone(id, false);
+      recordStepDone(id, false);
       throw error;
     }
   };

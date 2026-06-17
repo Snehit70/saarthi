@@ -52,6 +52,43 @@ export function humanizeAction(tool: string, rawArgs: unknown, opts: HumanizeOpt
       const app = str(args, "appName") ?? str(args, "command");
       return app ? `Launching ${app}` : "Launching app";
     }
+    case "browser_discover":
+      return "Discovering browsers";
+    case "browser_focus":
+      return "Focusing Zen";
+    case "browser_open_url": {
+      const url = str(args, "url");
+      if (!url) return "Opening URL in Zen";
+      try {
+        const parsed = new URL(url);
+        const target = parsed.protocol === "about:" ? url : parsed.hostname;
+        return `Opening ${target} in Zen`;
+      } catch {
+        return "Opening URL in Zen";
+      }
+    }
+    case "browser_vimium_hint": {
+      const text = str(args, "visibleText");
+      return text ? `Targeting ${quote(text)} in Zen` : "Targeting page in Zen";
+    }
+    case "browser_space_step": {
+      const direction = str(args, "direction");
+      return direction ? `Switching Zen space ${direction}` : "Switching Zen space";
+    }
+    case "tmux_list":
+      return "Listing tmux panes";
+    case "tmux_capture": {
+      const t = str(args, "target");
+      return t ? `Reading ${t}` : "Reading terminal";
+    }
+    case "tmux_run_command": {
+      const cmd = str(args, "command");
+      if (!cmd) return "Running command";
+      const short = cmd.length > 40 ? `${cmd.slice(0, 39)}…` : cmd;
+      return `Running ${quote(short)}`;
+    }
+    case "tmux_send_keys":
+      return "Sending keys to terminal";
     case "window_focus":
     case "window_focus_best":
       return "Focusing window";

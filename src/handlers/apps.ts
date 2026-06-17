@@ -2,10 +2,11 @@ import { z } from "zod";
 import { audit } from "../lib/audit.js";
 import {
   focusedWorkspaceName,
-  hyprctlDispatch,
   HyprlandError,
+  launchApp,
   listWindows,
   pickFirstEmptyWorkspace,
+  restoreWorkspaceIfNeeded,
 } from "../lib/hyprland.js";
 import { parseLaunchCommand, resolveWorkspaceRange } from "../lib/policy.js";
 import { APP_CATALOG, isLaunchCommandAvailable, resolveAppLaunchCommand } from "../lib/apps.js";
@@ -126,14 +127,10 @@ server.registerTool(
       };
     }
     try {
-      await hyprctlDispatch("exec", launchCommand);
+      await launchApp(launchCommand);
 
-      if (keepCurrentWorkspace && originalWorkspace && targetWorkspace && originalWorkspace !== targetWorkspace) {
-        try {
-          await hyprctlDispatch("workspace", originalWorkspace);
-        } catch {
-          // Keep launch success even if workspace restore fails.
-        }
+      if (keepCurrentWorkspace) {
+        await restoreWorkspaceIfNeeded(originalWorkspace, targetWorkspace);
       }
 
       await audit("app_launch", payload, dryRun, {
@@ -232,13 +229,9 @@ server.registerTool(
 
     try {
       if (!dryRun) {
-        await hyprctlDispatch("exec", launchCommand);
-        if (args.keepCurrentWorkspace && originalWorkspace && targetWorkspace && originalWorkspace !== targetWorkspace) {
-          try {
-            await hyprctlDispatch("workspace", originalWorkspace);
-          } catch {
-            // keep success
-          }
+        await launchApp(launchCommand);
+        if (args.keepCurrentWorkspace) {
+          await restoreWorkspaceIfNeeded(originalWorkspace, targetWorkspace);
         }
       }
 

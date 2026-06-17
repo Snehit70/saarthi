@@ -5,9 +5,11 @@ import { parsePngDimensions } from "./image.js";
 import {
   activeWindow,
   focusedWorkspaceName,
+  focusWindow,
   getWindowOrThrow,
   HyprlandError,
-  hyprctlDispatch,
+  restoreWorkspaceIfNeeded,
+  switchWorkspaceIfNeeded,
 } from "./hyprland.js";
 
 const execFileAsync = promisify(execFile);
@@ -23,6 +25,7 @@ export async function captureScreenshot(input: {
   const args = ["-"];
   let geometry: string | undefined;
   let originalWorkspace: string | null = null;
+  let targetWorkspace: string | null = null;
   let switchedWorkspace = false;
 
   if (input.target === "monitor") {
@@ -32,13 +35,13 @@ export async function captureScreenshot(input: {
     let win = input.target === "active_window" ? await activeWindow() : await getWindowOrThrow(input.windowId as WindowId);
     if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
     originalWorkspace = await focusedWorkspaceName();
-    if (originalWorkspace && win.workspace && originalWorkspace !== win.workspace) {
-      await hyprctlDispatch("workspace", win.workspace);
+    targetWorkspace = win.workspace;
+    if (await switchWorkspaceIfNeeded(originalWorkspace, targetWorkspace)) {
       switchedWorkspace = true;
       await sleep(80);
     }
 
-    await hyprctlDispatch("focuswindow", `address:${win.id}`);
+    await focusWindow(win.id);
     await sleep(40);
 
     // Re-read after switching/focusing so we capture the current geometry on the target workspace.
@@ -69,11 +72,7 @@ export async function captureScreenshot(input: {
     throw new HyprlandError("SCREENSHOT_FAILED", error instanceof Error ? error.message : String(error));
   } finally {
     if (switchedWorkspace && originalWorkspace) {
-      try {
-        await hyprctlDispatch("workspace", originalWorkspace);
-      } catch {
-        // Preserve screenshot outcome if workspace restore fails.
-      }
+      await restoreWorkspaceIfNeeded(originalWorkspace, targetWorkspace);
     }
   }
 }

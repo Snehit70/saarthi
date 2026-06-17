@@ -73,7 +73,6 @@ Set `includeLegacy=true` to also include legacy rows that have no `sessionId`.
 
 Exports merged audit + run trace events to a JSON file for later analysis.
 Session filtering is strict by default; `includeLegacy=true` also includes legacy rows without `sessionId`.
-  - `launchCommand`
 
 ## `desktop_health`
 
@@ -219,6 +218,142 @@ Polls for a matching window until timeout.
 
 - `window`
 - `attempts`
+
+## `browser_discover`
+
+### Inputs
+
+None.
+
+### Behavior
+
+Discovers the local browser state Saarthi currently supports:
+
+- Zen Flatpak availability (`app.zen_browser.zen`)
+- Firefox native availability
+- default desktop browser handlers
+- Zen and Firefox profile names/paths from `profiles.ini`
+- Zen device facts from the default profile:
+  - single/default profile path
+  - right-side vertical tabs and floating URL bar prefs
+  - active/continue-where-left-off workspace prefs
+  - public Firefox containers
+  - visible active/disabled extensions plus known extension flags for Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit
+  - configured Zen shortcuts for workspace forward/backward, pin-tab toggle, copy URL, and compact-mode toggle
+- currently running Zen windows
+
+This is a read-only inventory tool; it does not create profiles, change preferences, install extensions, or launch a browser.
+
+## `browser_focus`
+
+### Inputs
+
+- `titleContains?: string`
+- `includeHidden?: boolean` (default `false`)
+
+### Behavior
+
+Finds the best existing Zen window (`zen` / `app.zen_browser.zen`) and focuses it.
+If `titleContains` is provided, only matching Zen window titles are considered.
+
+## `browser_open_url`
+
+### Inputs
+
+- `url: string`
+- `mode?: "new-tab" | "new-window" | "current-tab"` (default `"new-tab"`)
+- `reuseExisting?: boolean` (deprecated compatibility flag)
+- `titleContains?: string`
+- `currentTabReason?: "blank-page-verified" | "user-said-here"` (required for `mode="current-tab"`)
+- `timeoutMs?: number` (default `45000`)
+- `pollMs?: number` (default `200`)
+- `typeDelayMs?: number` (default `0`)
+- `readiness?: "none" | "title-change" | "title-contains"` (default `title-change` for `http(s)`, `none` for `about:`)
+- `readyTitleContains?: string` (required when `readiness="title-contains"`)
+- `readyTimeoutMs?: number` (default `12000`)
+- `readyPollMs?: number` (default `250`)
+
+### Behavior
+
+Opens an allowed URL in the local Zen Flatpak browser.
+
+- Allowed URLs: `http:`, `https:`, `about:home`, `about:blank`
+- Rejected URLs: `file:`, `mailto:`, custom schemes, relative URLs, URLs with credentials
+- `mode="new-tab"`: focuses a matching existing Zen window, presses `Ctrl+T`, `Ctrl+L`, types the URL, and presses `Enter`
+- `mode="current-tab"`: requires `currentTabReason` and uses `Ctrl+L`, typed URL, `Enter`
+- `mode="new-window"`: launches Zen with `--new-window`
+- when no Zen window exists, `new-tab` and `current-tab` fall back to `--new-window`
+- after pressing Enter, the tool waits for lightweight readiness:
+  - `title-change` returns when the Zen title changes away from a blank/new-tab-like title
+  - `title-contains` returns when the title contains `readyTitleContains`
+  - `none` skips readiness waiting
+
+The launch is Zen-first and uses structured process arguments rather than raw shell interpolation. The tool still requires the `zen` launch alias to be allowed by policy, validates Zen availability through the launch policy, and enforces the shared launch rate limit.
+The default is intentionally new-tab so pinned tabs and the current page are not clobbered by routine navigation.
+Readiness timeout is reported as `readiness.ready=false`; it is not treated as a failed URL entry. Callers should verify with OCR/grid/wait tools before acting on page content.
+
+### Structured output
+
+- `opened`
+- `browser`
+- `url`
+- `mode`
+- `effectiveMode`
+- `window`
+- `attempts`
+- `wasNewWindow`
+- `readiness`
+
+## `browser_vimium_hint`
+
+### Inputs
+
+- `visibleText: string`
+- `windowId?: string`
+- `titleContains?: string`
+- `commit?: boolean` (default `true`)
+- `actionKind?: "read" | "navigate" | "type-field" | "send" | "commit-submit" | "destructive" | "payment"` (default `"navigate"`)
+- `confirmed?: boolean` (default `false`)
+- `focusSettleMs?: number` (default `120`)
+- `hintSettleMs?: number` (default `120`)
+- `typeDelayMs?: number` (default `0`)
+
+### Behavior
+
+Focuses a Zen window and drives Vimium in-page hints: press `f`, type visible text to filter hints, then press `Enter` when `commit=true`.
+If `actionKind` is `send`, `commit-submit`, `destructive`, or `payment`, committing requires `confirmed=true`.
+Use this for page content, not browser chrome. Use URL bar and Zen shortcuts for chrome.
+
+### Structured output
+
+- `hinted`
+- `committed`
+- `window`
+- `actionKind`
+
+## `browser_space_step`
+
+### Inputs
+
+- `direction: "forward" | "backward"`
+- `count?: number` (default `1`)
+- `windowId?: string`
+- `titleContains?: string`
+- `settleMs?: number` (default `120`)
+
+### Behavior
+
+Focuses a Zen window and steps Zen spaces using the configured workspace forward/backward shortcut from the default profile.
+The result includes the opposite `restore` action. Callers that temporarily switch spaces must call that restore action before finishing the task.
+This tool never closes tabs, pins tabs, unpins tabs, edits Zen preferences, or changes extensions.
+
+### Structured output
+
+- `stepped`
+- `direction`
+- `count`
+- `window`
+- `restore`
 
 ## `app_launch_and_wait`
 
@@ -460,9 +595,9 @@ Captures absolute rectangular region using `grim -g "<x>,<y> <width>x<height>"`.
 
 ### Behavior
 
-Validates actionable window, logs audit event, then runs:
+Validates actionable window, logs audit event, then dispatches through the Hyprland Lua API:
 
-- `hyprctl dispatch focuswindow address:<windowId>`
+- `hl.dsp.focus({ window = "address:<windowId>" })`
 
 ## `window_move`
 
@@ -478,10 +613,10 @@ Validates actionable window, logs audit event, then runs:
 - `delta`: values clamped/truncated via `clampMoveResize`.
 - `absolute`: values are clamped to the target window monitor bounds before dispatch.
 
-Dispatch:
+Dispatches through the Hyprland Lua API:
 
-- absolute: `hyprctl dispatch movewindowpixel exact <x> <y>,address:<id>`
-- delta: `hyprctl dispatch movewindowpixel <x> <y>,address:<id>`
+- absolute: `hl.dsp.window.move({ x = <x>, y = <y>, relative = false, window = "address:<id>" })`
+- delta: `hl.dsp.window.move({ x = <x>, y = <y>, relative = true, window = "address:<id>" })`
 
 ## `window_resize`
 
@@ -497,10 +632,10 @@ Dispatch:
 - `delta`: values clamped/truncated to `[1, 10000]`.
 - `absolute`: values clamped to target monitor dimensions.
 
-Dispatch:
+Dispatches through the Hyprland Lua API:
 
-- absolute: `hyprctl dispatch resizewindowpixel exact <w> <h>,address:<id>`
-- delta: `hyprctl dispatch resizewindowpixel <w> <h>,address:<id>`
+- absolute: reads the current window size, computes a delta, then uses the relative resize dispatcher.
+- delta: `hl.dsp.window.resize({ x = <w>, y = <h>, relative = true, window = "address:<id>" })`
 
 ## `workspace_focus`
 
@@ -512,7 +647,7 @@ Dispatch:
 
 Switches focused workspace:
 
-- `hyprctl dispatch workspace <workspace>`
+- `hl.dsp.focus({ workspace = "<workspace>" })`
 
 ## `window_send_to_workspace`
 
@@ -523,9 +658,9 @@ Switches focused workspace:
 
 ### Behavior
 
-Validates actionable window, logs audit event, runs:
+Validates actionable window, logs audit event, then dispatches through the Hyprland Lua API:
 
-- `hyprctl dispatch movetoworkspace <workspace>,address:<windowId>`
+- `hl.dsp.window.move({ workspace = "<workspace>", window = "address:<windowId>" })`
 
 ## Dry-run mode
 
@@ -917,3 +1052,76 @@ Queries the accessibility tree (AT-SPI) for structured, addressable elements. Mo
 ### Behavior
 
 Dumps an application's accessibility tree as a flat, depth-tagged element list for planning/inspection. Same element shape as `ui_find`.
+
+## `tmux_list`
+
+### Inputs
+
+None.
+
+### Behavior
+
+Lists all tmux sessions, windows, and panes without focusing any window. The primary way to discover a target. Read-only.
+
+### Structured output
+
+- `sessions[]`: `{ name, attached, windows }`
+- `panes[]`: `{ session, windowIndex, windowName, windowActive, paneIndex, paneId, target, active, sessionAttached, command, pid, title, width, height, cwd, isShell }`
+
+`target` is the `session:window.pane` string accepted by the other tmux tools. `command` is `pane_current_command`; `isShell` is false when a foreground program (editor, REPL, ssh, dev server) is running.
+
+## `tmux_capture`
+
+### Inputs
+
+- `target?: string` — `session:window.pane`, `session:window`, `%paneId`, a session name, or omit for the attached active pane
+- `lines?: number` (`1..5000`) — return only the last N lines
+- `scrollback?: number` (`0..50000`, default `0`) — lines of scrollback to include
+
+### Behavior
+
+Captures a pane's text. Use this instead of screenshots/OCR to read terminal state. Read-only.
+
+### Structured output
+
+- `target`, `command`, `isShell`, `text`
+
+## `tmux_run_command`
+
+### Inputs
+
+- `command: string` (required)
+- `target?: string` — pane target (see `tmux_capture`); omit for the attached active pane
+- `confirmBusy?: boolean` (default `false`) — set true only after confirming it is OK to send into a non-shell pane
+- `timeoutMs?: number` (`200..900000`, default `120000`)
+- `pollMs?: number` (`50..5000`, default `250`)
+- `scrollback?: number` (`0..50000`, default `3000`)
+- `maxOutputLines?: number` (`1..5000`, default `200`)
+
+### Behavior
+
+Runs a shell command in a pane and waits for completion using start/end sentinels (no prompt guessing), returning the parsed exit code and the command's output. fish panes use `$status`; other shells use `$?`. Refuses non-shell panes with `TMUX_PANE_BUSY` unless `confirmBusy` is set. On timeout it sends `C-c` to the command it started and returns `timedOut: true`.
+
+`classification` is advisory: `mutating` commands should be confirmed with the user first per the consent model; `safe` read-only commands run freely.
+
+### Structured output
+
+- `target`, `command`, `classification` (`safe`|`mutating`), `exitCode` (number|null), `output`, `timedOut`, `interrupted`, `durationMs`
+
+## `tmux_send_keys`
+
+### Inputs
+
+- `keys: string` (required)
+- `target?: string` — pane target; omit for the attached active pane
+- `literal?: boolean` (default `true`) — true: literal text; false: tmux key names (`Enter`, `C-c`, `Up`)
+- `enter?: boolean` (default `false`) — press Enter after sending
+- `confirmBusy?: boolean` (default `false`)
+
+### Behavior
+
+Sends raw keys to a pane for interactive programs (REPLs, editors, pickers) or control keys. Refuses non-shell panes unless `confirmBusy`. Does not wait for or parse output — follow with `tmux_capture`.
+
+### Structured output
+
+- `sent`, `target`, `enter`

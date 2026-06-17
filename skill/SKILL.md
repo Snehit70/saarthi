@@ -13,6 +13,11 @@ The Saarthi MCP server is stdio-only and belongs to the current MCP host/client
 session. Do not start or restart `saarthi-mcp.service`; if it exists, disable it.
 Use MCP tools directly after the client starts the stdio server.
 
+After changing and rebuilding the MCP server code, reconnect/restart the MCP
+client session that owns the stdio server. Existing `node dist/src/index.js`
+processes keep the old loaded modules until their client reconnects; rebuilding
+`dist` alone is not enough for already-connected tools.
+
 The eyes overlay HUD is the only persistent user service:
 
 ```bash
@@ -34,6 +39,30 @@ systemctl --user disable --now saarthi-mcp.service || true
 rm -f ~/.config/systemd/user/saarthi-mcp.service
 systemctl --user daemon-reload
 ```
+
+## Hyprland 0.55 Lua Dispatch
+
+This machine uses Hyprland 0.55+ Lua dispatcher semantics. Old split hyprctl
+forms such as `hyprctl dispatch workspace 1` can fail with Lua parse errors like
+`) expected near '1'`, often while still returning process exit code 0.
+
+When debugging or extending Saarthi dispatch behavior:
+
+- Keep Hyprland dispatcher construction centralized in `src/lib/hyprland.ts`.
+- Prefer MCP tools or the typed helper functions over handwritten `hyprctl dispatch ...` shell snippets.
+- Use Lua dispatcher expressions such as `hl.dsp.focus({ workspace = "1" })`, `hl.dsp.focus({ window = "address:0x..." })`, `hl.dsp.window.move(...)`, `hl.dsp.window.resize(...)`, `hl.dsp.cursor.move(...)`, and `hl.dsp.send_shortcut(...)`.
+- Treat `stdout` beginning with `error:` as a failure even if `hyprctl` exits 0.
+- For live validation, use no-op/current-state checks first: current workspace, active window, current position/size, and current cursor point.
+
+## Task Lifecycle (Overlay)
+
+Bookend every desktop task so the eyes HUD reflects reality:
+
+- **`overlay_task_start`** once, with a short human label, before the first desktop action.
+- **`overlay_task_complete`** when the task is finished — `done`, `error`, or `timeout`. This is mandatory teardown, not optional: call it before you hand the turn back, even on failure or when you stop to ask the user a question and do not expect to continue this task.
+- **`overlay_task_ping`** with `state: "waiting"` (or `dormant_waiting`) when you pause mid-task expecting to resume — e.g. waiting on a long load or a one-word user confirmation — so the HUD stays present without looking stuck.
+
+The overlay self-heals if you forget (an idle watchdog hides a task that stops updating, and the server stamps a terminal snapshot on shutdown), but that is a safety net with a multi-minute delay. Always close the task explicitly so the HUD settles immediately.
 
 ## Core Rule
 
@@ -70,6 +99,8 @@ So: Enter to load a URL is free; Enter in a chat composer is a *send* and is gat
 **Dry-run is exempt** — nothing actually happens, so no consent is needed.
 
 ## Preferred Tool Order
+
+For terminal/CLI work, skip GUI targeting entirely and use the tmux tools (see **## tmux**) — they are deterministic. The order below is for GUI apps.
 
 1. `desktop_health`, `window_find`, `window_get`, `window_focus`
 2. `workspace_topology` when task depends on monitor columns/left-right workspace placement
@@ -141,6 +172,85 @@ OCR is a hint, not proof. Prefer `ui_find` when the app exposes accessibility; r
 - Avoid acting on text if the same label can appear in multiple places.
 - Prefer partial tokens for discovery (`CODE`, `TEJAS`) but verify final state with stronger anchors (header title, input placeholder, selected row).
 - For non-fullscreen targets, use tools that convert target-relative coordinates internally (`click_text`, `mouse_move_to_text`) or grid tools.
+
+## tmux (terminal control)
+
+On this machine every terminal is already a tmux session: kitty's shell is a `sesh` launcher, so each window attaches/creates a session named after its project directory (e.g. `praxis`, `pravah`, `saarthi`). prefix is `C-Space`, base-index 1, `renumber-windows on`, `M-H`/`M-L` switch windows, `prefix+j` is the sesh picker.
+
+**For anything in a terminal, drive tmux directly — never type through the window manager and never screenshot/OCR a terminal.** Reading a pane is deterministic; so is running a command and reading its exit code.
+
+Tools:
+
+- `tmux_list` — discover sessions/windows/panes and each pane's `pane_current_command`. Start here to find a target. (read)
+- `tmux_capture` — read a pane's text (and scrollback). This replaces screenshots/OCR for terminal state. (read)
+- `tmux_run_command` — run a shell command in a pane and wait for completion; returns the parsed `exitCode` and the command's `output`. (act)
+- `tmux_send_keys` — raw keys for REPLs/editors/pickers and control keys (Enter, Escape, C-c, arrows). Use after a pane has been confirmed. (act)
+
+Rules:
+
+- **Headless by name.** Act on `session:window.pane` (or a bare session name, or `%paneId`). No GUI focus required; background sessions work.
+- **Targeting.** Explicit target wins; else a named session's active pane; else the attached active pane. If the tool returns `TMUX_TARGET_NOT_FOUND` or `TMUX_TARGET_AMBIGUOUS` (with candidates), ask which pane — never guess.
+- **Execution consent.** Reads (`tmux_list`/`tmux_capture`) are always free. `tmux_run_command` reports a `classification`: `safe` (read-only commands — `ls`, `git status`, `rg`, `cat`, tests) run freely; `mutating` (`rm`, `git push`, `sudo`, `dropdb`, anything not on the allowlist) is a gated act — confirm in chat first, then widenable for the rest of the turn. This obeys **Consent and Irreversible Actions**.
+- **Busy panes.** If a pane is not at a shell prompt (running vim, a REPL, ssh, a dev server), the tool refuses with `TMUX_PANE_BUSY` and names what's running. Ask the user, then re-call with `confirmBusy: true`. Do not blindly send into a non-shell pane.
+- **No lifecycle.** Never create or kill sessions/windows/panes — operate only within existing ones. The user owns structure via sesh.
+- **Completion is the exit code, not the vibe.** `tmux_run_command` waits on a sentinel and returns the real exit code (`$status` on fish, `$?` elsewhere). Branch on `exitCode === 0`, not on output text.
+- **Interrupts.** On timeout the tool sends `C-c` to the command it started and returns `timedOut: true` — report that, raise `timeoutMs`, or pick a different approach. Never send `C-d`/exit, and never interrupt a process the user launched.
+
+## Zen browser
+
+On this machine Zen is the primary browser and is the Flatpak app `app.zen_browser.zen`. `browser_discover` is the source of truth before browser work: it reports running Zen windows, profile paths, device prefs, containers, extensions, and configured Zen shortcuts. Do not generalize these facts to another machine without rediscovery.
+
+Current device facts verified from the local Zen profile:
+
+- Single profile: `5yvfntxd.Default (release)` under `~/.var/app/app.zen_browser.zen/.zen`.
+- Vertical tabs are on the right (`zen.tabs.vertical.right-side=true`), so right-edge grid clicks may hit tabs/pinned tabs.
+- The URL bar floats (`zen.urlbar.behavior=float`), so URL/chrome targeting should use keyboard shortcuts, not fixed coordinates.
+- Zen spaces are active with continue-where-left-off (`zen.workspaces.continue-where-left-off=true`).
+- A public `College` container exists.
+- Installed active extensions include Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit.
+- Live AT-SPI probe on 2026-05-31 against `Example Domain — Zen Browser` returned no Zen app/page elements, so treat Zen page AT-SPI as unavailable on this machine unless a fresh probe proves otherwise.
+
+Authenticated browser model:
+
+- Use the user's existing local Zen profile/window so cookies, localStorage, saved passwords, extensions, and containers stay intact.
+- Do not create a clean/headless/browser-test profile for user-facing browser tasks; that loses auth state and changes fingerprint/extension behavior.
+- Do not attach another independent automation engine to the same profile. Browser profiles are single-owner state; competing controllers can lock or corrupt session behavior.
+- Prefer local GUI/extension-aware control over remote browser transport. This repo intentionally keeps stdio MCP and does not expose browser HTTP/CDP control.
+- If auth has expired, navigate to the login/recovery page and stop for user action or explicit credentials. Never scrape saved passwords, never guess credentials, and never auto-submit login.
+
+Tools:
+
+- `browser_discover` — read Zen install/profile/prefs/container/extension/shortcut facts and running windows. Start here. (read)
+- `browser_focus` — focus the best matching Zen window. (act)
+- `browser_open_url` — open an allowed URL. Default is a new tab in an existing Zen window; falls back to a new window when no Zen window exists. (act)
+- `browser_vimium_hint` — Vimium-first page targeting: focus Zen, press `f`, type visible text, optionally commit with Enter. (act)
+- `browser_space_step` — switch Zen spaces forward/backward using configured shortcuts and return the opposite restore action. (act)
+
+Rules:
+
+- **Page targeting order.** For in-page elements, use Vimium first: `browser_vimium_hint` with the element's visible text. If Vimium cannot target it, try AT-SPI with `ui_find`. If AT-SPI does not expose useful page content, fall back to OCR/grid.
+- **Chrome targeting.** Do not use Vimium for URL bar, tabs, spaces, settings panels, or browser chrome. Use `browser_open_url`, Zen shortcuts, `browser_space_step`, or grid/OCR against verified chrome regions.
+- **Navigation default.** Routine navigation goes to a new tab: `Ctrl+T`, `Ctrl+L`, type URL, `Enter` through `browser_open_url`. Navigate the current tab only when the active tab is already verified blank/new-tab or the user says "here"; then pass `mode:"current-tab"` and `currentTabReason`.
+- **Fast navigation loop.** Use `browser_open_url` as the single primitive for open/focus/type/Enter/readiness. Its default is fast: open a new tab, focus the floating URL bar, type the URL, press Enter, then watch the Zen title for readiness. For known apps, pass `readiness:"title-contains"` with a stable title fragment (for example `Inbox`, `Dashboard`, or the product name). For throwaway blank pages or follow-up checks where you will immediately use `wait_for_text`, pass `readiness:"none"` to avoid double-waiting.
+- **Readiness is a hint, not proof.** `browser_open_url` can return `readiness.ready:false` when the title does not settle before `readyTimeoutMs`. That means the URL was entered but page readiness is unproven. Do not click/type into page content yet; run `wait_for_text`, screenshot/OCR, or grid verification. If those fail too, label `not_settled` or `verification_failed`.
+- **New windows.** Use `browser_open_url` with `mode:"new-window"` only when the task explicitly asks for a new window or no Zen window exists.
+- **Spaces and pinned tabs.** It is acceptable to switch Zen spaces and click pinned tabs to reach a target, but record the starting space/route and switch back before finishing. `browser_space_step` returns the restore direction/count. Never close, unpin, or repin pinned tabs.
+- **Commit gates.** Reading, scrolling, navigation, and typing into fields are free. Pause for chat confirmation before submit/send/post/buy/payment/destructive actions. `browser_vimium_hint` refuses to commit gated action kinds unless `confirmed:true`; this does not replace the need to verify the target first.
+- **Login safety.** Type only credentials explicitly provided in the task. Never use, save, guess, or submit stored credentials. Do not auto-submit login forms.
+- **Hands off config.** Do not change Zen settings, `about:config`, profiles, containers, extensions, or extension settings as a side effect. If a task seems to need configuration changes, ask and treat that as a separate gated task.
+- **Extension awareness.** Work with installed extensions. Do not re-dismiss a banner Consent-O-Matic handled. Expect Dark Reader color changes. Remember that uBlock Origin and Unhook may remove page elements; missing page content may be intentional.
+- **AT-SPI check.** Current local evidence says Zen page AT-SPI is unavailable. Before depending on `ui_find` for a Zen page, focus Zen and run a small `ui_find`/`ui_tree` probe. If it returns only chrome or no useful page nodes, label that route `a11y_unavailable` and proceed to OCR/grid.
+
+Performance and failure readiness:
+
+- Keep one live Zen window warm. Cold Flatpak launch can take tens of seconds; existing-window new tabs usually complete in one tool call.
+- Prefer title readiness first because it is cheap and does not require screenshots. Use visual waits only for page-specific proof.
+- Do not chain manual `browser_focus` + `key_press` + `type_text` + `key_press` for normal URLs; that is slower and easier to race than `browser_open_url`.
+- After navigation, start from the returned `window.id` and `readiness` fields. If `ready:true`, inspect the page immediately. If `ready:false`, wait for one strong page anchor (`wait_for_text`) before acting.
+- For pages that keep the old title during SPA loads, use `readiness:"none"` plus `wait_for_text` on a real page anchor; otherwise title-change waiting wastes time.
+- For login or auth-expired pages, stop at the recovery screen unless credentials were explicitly provided. Typing credentials is allowed; submitting the login remains gated.
+- If a Vimium hint fails or the wrong thing opens, press `escape`, verify the page/URL state, and try one alternate route (`ui_find` probe, then OCR/grid). Do not repeatedly press Enter or reuse stale hint labels.
+- If Zen is missing from `browser_discover.runningWindows`, prefer `browser_open_url` with the requested URL instead of launching Zen separately. It records the fallback and readiness outcome.
 
 ## Browser and WhatsApp Web
 

@@ -2,12 +2,12 @@ import { z } from "zod";
 import { audit } from "../lib/audit.js";
 import {
   focusedWorkspaceName,
-  hyprctlDispatch,
   HyprlandError,
   listWorkspaces,
   listMonitors,
   listWindows,
   pickFirstEmptyWorkspace,
+  switchWorkspace,
 } from "../lib/hyprland.js";
 import { isNumericWorkspaceName } from "../lib/util.js";
 import { pickWorkspaceForMonitor } from "../lib/workspace.js";
@@ -201,7 +201,7 @@ server.registerTool(
             structuredContent: payload,
           };
         }
-        const out = await hyprctlDispatch("workspace", currentWorkspace);
+        const out = await switchWorkspace(currentWorkspace);
         return {
           content: [{ type: "text", text: out || "ok" }],
           structuredContent: payload,
@@ -234,7 +234,7 @@ server.registerTool(
           structuredContent: payload,
         };
       }
-      const out = await hyprctlDispatch("workspace", currentWorkspace);
+      const out = await switchWorkspace(currentWorkspace);
       return {
         content: [{ type: "text", text: out || "ok" }],
         structuredContent: payload,
@@ -264,7 +264,7 @@ server.registerTool(
           structuredContent: payload,
         };
       }
-      const out = await hyprctlDispatch("workspace", currentWorkspace);
+      const out = await switchWorkspace(currentWorkspace);
       return {
         content: [{ type: "text", text: out || "ok" }],
         structuredContent: payload,
@@ -287,7 +287,7 @@ server.registerTool(
         structuredContent: payload,
       };
     }
-    const out = await hyprctlDispatch("workspace", targetWorkspaceInfo.name);
+    const out = await switchWorkspace(targetWorkspaceInfo.name);
     return {
       content: [{ type: "text", text: out || "ok" }],
       structuredContent: payload,
@@ -318,7 +318,7 @@ server.registerTool(
       return { content: [{ type: "text", text: `DRY_RUN workspace ${params}` }] };
     }
 
-    const output = await hyprctlDispatch("workspace", params);
+    const output = await switchWorkspace(params);
     return { content: [{ type: "text", text: output || "ok" }] };
   },
 );

@@ -36,6 +36,8 @@ export async function bootClient(): Promise<BootedClient> {
   await import("../src/handlers/windows.js");
   await import("../src/handlers/workspaces.js");
   await import("../src/handlers/apps.js");
+  await import("../src/handlers/browser.js");
+  await import("../src/handlers/tmux.js");
   await import("../src/handlers/screenshots.js");
   await import("../src/handlers/input.js");
   await import("../src/handlers/mouse.js");
