@@ -6,13 +6,21 @@ import {
   filterWindowsByQuery,
   formatError,
   HyprlandError,
+  focusWindowExpression,
   focusWindowParams,
+  launchAppExpression,
+  moveCursorExpression,
   moveCursorParams,
+  moveWindowExpression,
   moveWindowParams,
+  resizeWindowExpression,
   pickFirstEmptyWorkspace,
   resizeWindowParams,
+  sendShortcutExpression,
   sendShortcutParams,
+  sendWindowToWorkspaceExpression,
   sendWindowToWorkspaceParams,
+  switchWorkspaceExpression,
   workspaceNeedsSwitch,
 } from "../src/lib/hyprland.js";
 import type { MonitorInfo, WindowInfo } from "../src/lib/types.js";
@@ -78,6 +86,28 @@ describe("dispatch parameter builders", () => {
     expect(sendShortcutParams("CTRL SHIFT", "L")).toBe("CTRL SHIFT,L");
     expect(sendShortcutParams("", "RETURN")).toBe("RETURN");
     expect(moveCursorParams(120, 300)).toBe("120 300");
+  });
+
+  it("formats workspace focus as a Hyprland Lua dispatcher expression", () => {
+    expect(switchWorkspaceExpression("7")).toBe('hl.dsp.focus({ workspace = "7" })');
+    expect(switchWorkspaceExpression("m+1")).toBe('hl.dsp.focus({ workspace = "m+1" })');
+  });
+
+  it("formats remaining mutating actions as Hyprland Lua dispatcher expressions", () => {
+    expect(focusWindowExpression("0xabc")).toBe('hl.dsp.focus({ window = "address:0xabc" })');
+    expect(moveWindowExpression("0xabc", "absolute", 10, 20)).toBe(
+      'hl.dsp.window.move({ x = 10, y = 20, relative = false, window = "address:0xabc" })',
+    );
+    expect(moveWindowExpression("0xabc", "delta", -5, 8)).toBe(
+      'hl.dsp.window.move({ x = -5, y = 8, relative = true, window = "address:0xabc" })',
+    );
+    expect(resizeWindowExpression("0xabc", "absolute", 800, 600)).toBe(
+      'hl.dsp.window.resize({ x = 800, y = 600, relative = false, window = "address:0xabc" })',
+    );
+    expect(sendWindowToWorkspaceExpression("0xabc", "7")).toBe('hl.dsp.window.move({ workspace = "7", window = "address:0xabc" })');
+    expect(sendShortcutExpression("CTRL SHIFT", "L")).toBe('hl.dsp.send_shortcut({ mods = "CTRL SHIFT", key = "L" })');
+    expect(moveCursorExpression(120, 300)).toBe("hl.dsp.cursor.move({ x = 120, y = 300 })");
+    expect(launchAppExpression('printf "%s" ok')).toBe('hl.dsp.exec_cmd("printf \\"%s\\" ok")');
   });
 });
 

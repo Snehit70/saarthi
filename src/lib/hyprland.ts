@@ -100,7 +100,30 @@ export async function hyprctlDispatch(dispatcher: string, params: string): Promi
   if (stderr && stderr.trim()) {
     throw new HyprlandError("NO_SOCKET", stderr.trim());
   }
-  return stdout.trim();
+  const output = stdout.trim();
+  if (output.startsWith("error:")) {
+    throw new HyprlandError("NO_SOCKET", output);
+  }
+  return output;
+}
+
+async function hyprctlDispatchExpression(expression: string): Promise<string> {
+  const sig = await pickWorkingSignature();
+  const { stdout, stderr } = await execFileAsync("hyprctl", ["dispatch", expression], {
+    env: { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: sig },
+  });
+  if (stderr && stderr.trim()) {
+    throw new HyprlandError("NO_SOCKET", stderr.trim());
+  }
+  const output = stdout.trim();
+  if (output.startsWith("error:")) {
+    throw new HyprlandError("NO_SOCKET", output);
+  }
+  return output;
+}
+
+function luaString(value: string): string {
+  return JSON.stringify(value);
 }
 
 function addressParam(windowId: WindowId): string {
@@ -111,32 +134,64 @@ export function focusWindowParams(windowId: WindowId): string {
   return addressParam(windowId);
 }
 
+export function focusWindowExpression(windowId: WindowId): string {
+  return `hl.dsp.focus({ window = ${luaString(focusWindowParams(windowId))} })`;
+}
+
 export function moveWindowParams(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): string {
   return mode === "absolute" ? `exact ${x} ${y},${addressParam(windowId)}` : `${x} ${y},${addressParam(windowId)}`;
+}
+
+export function moveWindowExpression(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): string {
+  return `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = ${mode === "delta" ? "true" : "false"}, window = ${luaString(focusWindowParams(windowId))} })`;
 }
 
 export function resizeWindowParams(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): string {
   return mode === "absolute" ? `exact ${width} ${height},${addressParam(windowId)}` : `${width} ${height},${addressParam(windowId)}`;
 }
 
+export function resizeWindowExpression(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): string {
+  return `hl.dsp.window.resize({ x = ${width}, y = ${height}, relative = ${mode === "delta" ? "true" : "false"}, window = ${luaString(focusWindowParams(windowId))} })`;
+}
+
 export function sendWindowToWorkspaceParams(windowId: WindowId, workspace: string): string {
   return `${workspace},${addressParam(windowId)}`;
+}
+
+export function sendWindowToWorkspaceExpression(windowId: WindowId, workspace: string): string {
+  return `hl.dsp.window.move({ workspace = ${luaString(workspace)}, window = ${luaString(focusWindowParams(windowId))} })`;
+}
+
+export function switchWorkspaceExpression(workspace: string): string {
+  return `hl.dsp.focus({ workspace = ${luaString(workspace)} })`;
 }
 
 export function sendShortcutParams(mods: string, key: string): string {
   return mods ? `${mods},${key}` : key;
 }
 
+export function sendShortcutExpression(mods: string, key: string): string {
+  return `hl.dsp.send_shortcut({ mods = ${luaString(mods)}, key = ${luaString(key)} })`;
+}
+
 export function moveCursorParams(x: number, y: number): string {
   return `${x} ${y}`;
 }
 
+export function moveCursorExpression(x: number, y: number): string {
+  return `hl.dsp.cursor.move({ x = ${x}, y = ${y} })`;
+}
+
+export function launchAppExpression(command: string): string {
+  return `hl.dsp.exec_cmd(${luaString(command)})`;
+}
+
 export async function focusWindow(windowId: WindowId): Promise<string> {
-  return hyprctlDispatch("focuswindow", focusWindowParams(windowId));
+  return hyprctlDispatchExpression(focusWindowExpression(windowId));
 }
 
 export async function switchWorkspace(workspace: string): Promise<string> {
-  return hyprctlDispatch("workspace", workspace);
+  return hyprctlDispatchExpression(switchWorkspaceExpression(workspace));
 }
 
 export function workspaceNeedsSwitch(currentWorkspace: string | null, targetWorkspace: string | null | undefined): targetWorkspace is string {
@@ -161,27 +216,34 @@ export async function restoreWorkspaceIfNeeded(originalWorkspace: string | null,
 }
 
 export async function launchApp(command: string): Promise<string> {
-  return hyprctlDispatch("exec", command);
+  return hyprctlDispatchExpression(launchAppExpression(command));
 }
 
 export async function moveWindow(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): Promise<string> {
-  return hyprctlDispatch("movewindowpixel", moveWindowParams(windowId, mode, x, y));
+  return hyprctlDispatchExpression(moveWindowExpression(windowId, mode, x, y));
 }
 
 export async function resizeWindow(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): Promise<string> {
-  return hyprctlDispatch("resizewindowpixel", resizeWindowParams(windowId, mode, width, height));
+  if (mode === "absolute") {
+    const win = (await listWindows({ includeHidden: true })).find((w) => w.id === windowId);
+    if (!win) {
+      throw new HyprlandError("WINDOW_NOT_FOUND", `Window not found: ${windowId}`);
+    }
+    return hyprctlDispatchExpression(resizeWindowExpression(windowId, "delta", width - win.size.width, height - win.size.height));
+  }
+  return hyprctlDispatchExpression(resizeWindowExpression(windowId, mode, width, height));
 }
 
 export async function sendWindowToWorkspace(windowId: WindowId, workspace: string): Promise<string> {
-  return hyprctlDispatch("movetoworkspace", sendWindowToWorkspaceParams(windowId, workspace));
+  return hyprctlDispatchExpression(sendWindowToWorkspaceExpression(windowId, workspace));
 }
 
 export async function sendShortcut(mods: string, key: string): Promise<string> {
-  return hyprctlDispatch("sendshortcut", sendShortcutParams(mods, key));
+  return hyprctlDispatchExpression(sendShortcutExpression(mods, key));
 }
 
 export async function moveCursor(x: number, y: number): Promise<string> {
-  return hyprctlDispatch("movecursor", moveCursorParams(x, y));
+  return hyprctlDispatchExpression(moveCursorExpression(x, y));
 }
 
 export async function listMonitors(): Promise<MonitorInfo[]> {
