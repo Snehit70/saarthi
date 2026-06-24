@@ -17,6 +17,15 @@ saarthi --help
 
 `package.json` installs `saarthi` from `dist/src/cli.js`. Re-run `pnpm build` after source changes; the linked command immediately uses the rebuilt file.
 
+### Migrating from the MCP server
+
+Saarthi used to run as an MCP server. If you registered it with an MCP host (e.g. Claude Code), remove that registration on each machine — it is what loaded ~90 tool schemas into every session, and the CLI replaces it. Nothing in this repo can remove it for you; it lives in your host config.
+
+- Claude Code: delete the `saarthi_mcp` entry from `mcpServers` in `~/.claude.json` (or run `claude mcp remove saarthi_mcp`).
+- Drop any `mcp__saarthi_mcp__*` permission entries from `.claude/settings.local.json` and allow `Bash(saarthi *)` instead.
+
+After that, agents call the CLI through their shell rather than connecting to a server.
+
 ## Usage
 
 ```bash
