@@ -13,8 +13,12 @@ An application surface that can be found, focused, moved, or resized.
 _Avoid_: app, client
 
 **Action Step**:
-A single automation action with an expected outcome.
-_Avoid_: command, operation
+A single automation action with an expected outcome. This is the domain concept — the unit of meaning, independent of how it is invoked.
+_Avoid_: operation
+
+**Command**:
+The CLI surface for invoking an Action Step — e.g. `saarthi window focus`. "Command" names the interface; "Action Step" names the meaning. They are different layers and both are canonical.
+_Structure_: `saarthi <noun> <verb>`, mirroring the domain (window, workspace, app, screenshot, mouse, grid, browser, tmux, text, ui).
 
 **Verification**:
 A deliberate check that the desktop state now matches the expected result.

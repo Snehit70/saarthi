@@ -7,6 +7,7 @@ import { join } from "node:path";
 // status.ts derives its path from homedir() at import and keeps module-global
 // state, so set HOME before importing and drive it directly.
 let statusPath: string;
+let taskPath: string;
 let status: typeof import("../src/lib/status.js");
 
 beforeAll(async () => {
@@ -15,6 +16,7 @@ beforeAll(async () => {
   process.env.SAARTHI_SESSION_ID = "status-test";
   process.env.SAARTHI_STATUS = "1";
   statusPath = join(home, ".local", "state", "saarthi", "status.json");
+  taskPath = join(home, ".local", "state", "saarthi", "overlay-task.json");
   status = await import("../src/lib/status.js");
 });
 
@@ -113,15 +115,23 @@ describe("status feed", () => {
     });
   });
 
-  it("settles an in-flight task to a terminal snapshot on shutdown flush", async () => {
+  it("persists an explicit task for the next CLI process", async () => {
+    const task = status.startTask("cross-process task");
+    status.pingTask("dormant_waiting");
+    await vi.waitFor(async () => {
+      const persisted = JSON.parse(await readFile(taskPath, "utf8"));
+      expect(persisted).toMatchObject({ id: task.id, label: "cross-process task", state: "dormant_waiting" });
+    });
+  });
+
+  it("settles an in-flight command while preserving its explicit task", async () => {
     status.startTask("interrupted task");
     status.recordStepStart("mouse_click", "act", "Clicking");
-    // Leave the step un-done, mimicking a process that dies mid-tool-call.
     status.flushIdleSync();
     const s = await readSnap();
-    expect(s.state).toBe("idle");
-    expect(s.task.state).toBe("complete");
-    expect(s.task.completedAt).toBeTruthy();
+    expect(s.state).toBe("active");
+    expect(s.task.state).toBe("waiting");
+    expect(s.task.completedAt).toBeNull();
     expect(s.current).toBeNull();
   });
 });

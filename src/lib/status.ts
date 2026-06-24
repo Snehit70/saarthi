@@ -1,14 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { dirname } from "node:path";
+import { readStateSync, statePath, writeStateAtomicSync } from "./state.js";
 
 // Live status feed consumed by the desktop overlay HUD. Writing is best-effort
 // and must never affect tool behavior, so every failure is swallowed and writes
 // are fire-and-forget (never awaited by callers).
 
-const STATUS_PATH = join(homedir(), ".local", "state", "saarthi", "status.json");
+const STATUS_PATH = statePath("status.json");
+const TASK_PATH = statePath("overlay-task.json");
 const MAX_STEPS = 25;
 const ENABLED = process.env.SAARTHI_STATUS !== "0";
 
@@ -59,7 +59,9 @@ let seq = 0;
 let tmpSeq = 0;
 const recent: Step[] = [];
 const running = new Set<number>();
-let task: Task | null = null;
+const loadedTask = readStateSync<Task>(TASK_PATH);
+let task: Task | null = loadedTask;
+let taskPersisted = isActive(loadedTask);
 let dirEnsured = false;
 let flushChain: Promise<void> = Promise.resolve();
 
@@ -95,6 +97,15 @@ function isActive(t: Task | null): t is Task {
 function clearSteps(): void {
   recent.length = 0;
   running.clear();
+}
+
+function persistTask(): void {
+  if (!task) return;
+  try {
+    writeStateAtomicSync(TASK_PATH, task);
+  } catch {
+    // best-effort; overlay state must never alter command behavior
+  }
 }
 
 /** Build a brand-new task in its starting (waiting, no steps) state. */
@@ -171,26 +182,32 @@ function flush(): void {
 export function startTask(label = "desktop task"): Task {
   // An explicit start always begins a clean task, even if one was mid-flight.
   task = freshTask(label);
+  taskPersisted = true;
   clearSteps();
+  persistTask();
   void flush();
   return task;
 }
 
 export function pingTask(state: Extract<TaskState, "waiting" | "dormant_waiting"> = "waiting"): Task {
   const activeTask = ensureTask();
+  taskPersisted = true;
   activeTask.state = running.size > 0 ? "working" : state;
   activeTask.updatedAt = nowIso();
+  persistTask();
   void flush();
   return activeTask;
 }
 
 export function completeTask(status: TaskCompleteStatus = "done"): Task {
   const activeTask = ensureTask();
+  taskPersisted = true;
   const ts = nowIso();
   activeTask.state = status === "done" ? "complete" : status;
   activeTask.updatedAt = ts;
   activeTask.completedAt = ts;
   running.clear();
+  persistTask();
   void flush();
   return activeTask;
 }
@@ -198,36 +215,39 @@ export function completeTask(status: TaskCompleteStatus = "done"): Task {
 /**
  * Best-effort synchronous cleanup for process shutdown. Async flushes can't
  * settle before process.exit, so on exit we stamp a terminal snapshot
- * synchronously: any in-flight task is marked complete so the overlay settles
- * and hides instead of freezing on the last "working" state forever.
+ * synchronously. Explicit overlay tasks remain waiting across CLI invocations;
+ * implicit per-command tasks complete so the HUD cannot freeze on "working".
  */
 export function flushIdleSync(): void {
   if (!ENABLED) return;
   try {
-    if (isActive(task)) {
+    if (isActive(task) && taskPersisted) {
+      task.state = "waiting";
+      task.updatedAt = nowIso();
+      persistTask();
+    } else if (isActive(task)) {
       const ts = nowIso();
       task.state = "complete";
       task.updatedAt = ts;
       task.completedAt = ts;
     }
     running.clear();
-    mkdirSync(dirname(STATUS_PATH), { recursive: true });
     const snapshot: StatusSnapshot = {
       schema: 2,
       sessionId: sessionId(),
-      state: "idle",
+      state: topLevelState(),
       updatedAt: nowIso(),
       task: task ? { ...task, stats: { ...task.stats } } : null,
       current: null,
       recent: recent.slice(),
     };
-    writeFileSync(STATUS_PATH, JSON.stringify(snapshot), "utf8");
+    writeStateAtomicSync(STATUS_PATH, snapshot);
   } catch {
     // best-effort; the overlay self-heals via its inactivity watchdog regardless
   }
 }
 
-/** Record that a tool call has started. Returns the step id for completion. */
+/** Record that a command has started. Returns the step id for completion. */
 export function recordStepStart(tool: string, kind: ToolKind, label: string): number {
   const activeTask = ensureTask("desktop task");
   const step: Step = {
@@ -247,11 +267,12 @@ export function recordStepStart(tool: string, kind: ToolKind, label: string): nu
   if (kind === "read") activeTask.stats.reads += 1;
   if (kind === "act") activeTask.stats.acts += 1;
   if (label.toLowerCase().includes("retry") || tool.toLowerCase().includes("retry")) activeTask.stats.retries += 1;
+  if (taskPersisted) persistTask();
   void flush();
   return step.id;
 }
 
-/** Record that a previously started tool call has finished. */
+/** Record that a previously started command has finished. */
 export function recordStepDone(id: number, ok: boolean): void {
   const step = recent.find((s) => s.id === id);
   if (step) step.state = ok ? "done" : "error";
@@ -260,6 +281,7 @@ export function recordStepDone(id: number, ok: boolean): void {
     if (!ok) task.stats.errors += 1;
     task.state = running.size > 0 ? "working" : "waiting";
     task.updatedAt = nowIso();
+    if (taskPersisted) persistTask();
   }
   void flush();
 }

@@ -1,5 +1,7 @@
 # Deep Review Report
 
+> Historical report for the removed frontend. Current review and verification contracts are documented in `docs/ARCHITECTURE.md`.
+
 Date: 2026-05-25
 Reviewer: Codex
 Scope: `src/**`, `scripts/smoke-test.ts`, tests, runtime/build scripts

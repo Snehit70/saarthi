@@ -244,7 +244,7 @@ For each new tool:
 
 1. unit tests for schema and pure helpers
 2. mocked adapter tests for success/failure branches
-3. one smoke scenario in `scripts/smoke-test.ts` (dry-run where needed)
+3. one scenario in `scripts/cli-smoke.ts` (dry-run where needed)
 4. one live manual validation recipe in `docs/OPERATIONS.md`
 
 ## Recommended First Sprint (Concrete)

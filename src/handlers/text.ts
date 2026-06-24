@@ -4,7 +4,7 @@ import type { WindowId } from "../lib/types.js";
 import { sleep } from "../lib/util.js";
 import { performMouseClick, performMouseMove } from "../lib/mouse.js";
 import { performFindTextOnScreen, resolveTextClickPoint } from "../lib/text-locate.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
 server.registerTool(

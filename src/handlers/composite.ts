@@ -18,8 +18,8 @@ import {
 import { cellToRelativePoint, ensureGridSessionFresh, resolvePointerCoordinates } from "../lib/pointer.js";
 import { performMouseClick } from "../lib/mouse.js";
 import { performFindTextOnScreen, resolveTextClickPoint } from "../lib/text-locate.js";
-import { server } from "../server.js";
-import { dryRun, gridSession, screenshotDirDefault } from "../runtime.js";
+import { server } from "../registry.js";
+import { dryRun, gridSession, persistGridSession, screenshotDirDefault } from "../runtime.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -203,6 +203,7 @@ server.registerTool(
         if (!args.cellId) throw new HyprlandError("INPUT_FAILED", "cellId is required for action=grid_click");
         if (!gridSession.current) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
         gridSession.current = await ensureGridSessionFresh(gridSession.current);
+        persistGridSession(gridSession.current);
         const point = cellToRelativePoint(gridSession.current, args.cellId);
         const absX = gridSession.current.originAbsoluteX + point.x;
         const absY = gridSession.current.originAbsoluteY + point.y;

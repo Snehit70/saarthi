@@ -1,62 +1,31 @@
-# Operations Guide
+# Operations
 
-## Prerequisites
+## Install And Upgrade
 
-- Wayland + Hyprland session running under the same user
-- `hyprctl` in PATH
-- `grim` in PATH
-- `wtype` in PATH
-- `tesseract` in PATH (OCR tools)
-- `ydotool` + `ydotoold` (mouse tools)
-- Node 20+
-
-## Build and test
+Check that no development process is already running before starting one. The normal CLI does not need a server process.
 
 ```bash
-npx tsc -p tsconfig.json
-npx vitest run
-```
-
-If your `pnpm` policy blocks scripts via `ERR_PNPM_IGNORED_BUILDS`, use direct `npx` commands as above.
-
-## Start server
-
-Development:
-
-```bash
-pnpm dev
-```
-
-Compiled:
-
-```bash
+pnpm install
 pnpm build
-pnpm start
+npm link
+command -v saarthi
+saarthi --help
 ```
 
-## MCP and overlay model
+After source changes, run `pnpm build`. The npm-linked command points at `dist/src/cli.js`, so no service or client reconnect is required.
 
-The MCP server is stdio-only and starts per MCP host/client session. Agents
-should use MCP tools directly after their client starts the server. Do not run
-or restart MCP with systemd.
+## Overlay Service
 
-The eyes overlay HUD is the persistent user service. It watches
-`~/.local/state/saarthi/status.json`, appears while status is `active`, and hides
-after idle. Install/start it with:
+Only the overlay HUD is managed by systemd:
 
 ```bash
-/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+scripts/install-overlay-service.sh
 systemctl --user restart saarthi-overlay.service
 systemctl --user status saarthi-overlay.service --no-pager
-```
-
-Logs:
-
-```bash
 journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ```
 
-If the old invalid MCP service is present, remove it:
+Remove any obsolete service if found:
 
 ```bash
 systemctl --user disable --now saarthi-mcp.service || true
@@ -64,281 +33,141 @@ rm -f ~/.config/systemd/user/saarthi-mcp.service
 systemctl --user daemon-reload
 ```
 
-Verify no stale shared MCP daemon remains:
+Never start `saarthi-mcp.service`. Saarthi has no long-lived command service.
+
+## Run Context
+
+Group commands from one agent run:
 
 ```bash
-systemctl --user status saarthi-mcp.service --no-pager || true
-ps -eo pid,cmd | rg '/home/snehit/projects/saarthi/dist/src/index.js' || true
+export SAARTHI_SESSION_ID="agent-$(date +%s)"
+saarthi overlay task-start --label "desktop task"
 ```
 
-## ydotool service setup (required for mouse primitives)
-
-Install:
+Finish explicitly:
 
 ```bash
-sudo dnf install ydotool
+saarthi overlay task-complete --status done
 ```
 
-On Fedora, default service may create root-owned socket under `/tmp`, which breaks user MCP calls.
-Use service override so socket is created in user runtime dir:
+Use `error` or `timeout` when appropriate. Inspect current state at `~/.local/state/saarthi/status.json`.
+
+## Verification
 
 ```bash
-sudo systemctl stop ydotool.service
-sudo systemctl edit ydotool.service
+pnpm test
+pnpm build
+pnpm smoke
 ```
 
-Override content:
-
-```ini
-[Service]
-ExecStart=
-ExecStart=/usr/bin/ydotoold --socket-path=/run/user/1000/.ydotool_socket --socket-own=1000:1000 --socket-perm=0660
-```
-
-Reload and start:
+Optional live checks:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now ydotool.service
+saarthi observability desktop-health --json | jq .
+saarthi window list --json | jq '.windows | length'
+pnpm smoke:screenshot
 ```
 
-Verify:
+`pnpm smoke:screenshot` performs a real capture. Read/view the returned path and remove the generated test image when no longer needed.
+
+Dry-run mutations with:
 
 ```bash
+SAARTHI_DRY_RUN=1 saarthi window focus 0xABC --json
+```
+
+## Exit Handling
+
+Stdout is reserved for result data. Stderr contains validation or operational errors.
+
+```bash
+if payload=$(saarthi window get 0xABC --json); then
+  jq .window <<<"$payload"
+else
+  code=$?
+  printf 'saarthi failed with exit %s\n' "$code" >&2
+fi
+```
+
+Exit `2` indicates command/argument validation. Other stable categories are documented by `src/cli/execute.ts` and cover platform/socket, window, dispatch, screenshot, input, OCR/accessibility, app launch, timeout, and tmux failures.
+
+## Logs And State
+
+```text
+~/.local/state/saarthi/audit.jsonl
+~/.local/state/saarthi/status.json
+~/.local/state/saarthi/overlay-task.json
+~/.local/state/saarthi/grid-session.json
+~/.local/state/saarthi/launch-timestamps.json
+logs/actions/run.jsonl
+```
+
+Export one session trace:
+
+```bash
+saarthi observability session-trace-export --session-id "$SAARTHI_SESSION_ID" --json
+```
+
+All state files that replace process memory are local to the current user. Status and JSON state writes use atomic temp-plus-rename updates.
+
+## Dependencies
+
+Check only the capability being diagnosed:
+
+```bash
+command -v hyprctl grim wtype ydotool tesseract magick tmux python3
+hyprctl -j version
+hyprctl configerrors
 systemctl is-active ydotool.service
-ls -l /run/user/1000/.ydotool_socket
-ydotool mousemove --absolute 200 200
 ```
 
-Expected:
+AT-SPI also needs Python GI bindings. Screenshot capture needs `grim`; grid rendering and screenshot comparison need ImageMagick; OCR needs `tesseract`.
 
-- service is `active`
-- socket owner is your user
-- `ydotool mousemove` exits without socket connection error
+## Troubleshooting
 
-## Smoke tests
+### No Hyprland socket
 
-Basic:
+Confirm the command runs as the desktop user and inspect `/run/user/$UID/hypr/*/.socket.sock`. A stale `HYPRLAND_INSTANCE_SIGNATURE` is tolerated because Saarthi probes live candidates.
+
+### Dispatcher appears successful but nothing changed
+
+Inspect stdout for `error:`. Hyprland 0.55 Lua dispatch can return process exit zero with an error string. Keep command construction in `src/lib/hyprland.ts`.
+
+### Window command rejected
+
+Refresh live ids before mutating:
 
 ```bash
-npx tsc -p tsconfig.json
-node dist/scripts/smoke-test.js
+saarthi window list --include-hidden --json
 ```
 
-With screenshot capture:
-
-```bash
-npx tsc -p tsconfig.json
-node dist/scripts/smoke-test.js --with-screenshot
-```
-
-Dry-run smoke (recommended first pass):
-
-```bash
-USE_MCP_DRY_RUN=1 node dist/scripts/smoke-test.js
-```
-
-The smoke script validates all current tools:
-
-- `desktop_health`
-- `desktop_screenshot`
-- `window_list`
-- `window_get`
-- `window_find`
-- `window_focus`
-- `window_move`
-- `window_resize`
-- `workspace_focus`
-- `window_send_to_workspace`
-
-With `--with-screenshot`, smoke also validates grid/in-view flow:
-
-- `grid_show`
-- `grid_cell_to_point`
-- `grid_move`
-- `grid_click`
-- `grid_hide`
-- `mouse_verify_in_view`
-
-## Manual composition test (Zathura flow)
-
-Use this sequence in your MCP client/Codex:
-
-1. `window_find` with `classContains: "zathura"` and `limit: 1`
-2. extract `windows[0].id`
-3. `desktop_screenshot` with `target: "window"` and that `windowId`
-
-For persistent proof and later inspection:
-
-4. `desktop_screenshot_save` with the same `windowId`
-5. open the returned `path` and verify the image content before reporting success
-
-## Audit logs
-
-Mutating tool calls append to:
-
-- `~/.local/state/saarthi/audit.jsonl`
-- `./logs/actions/run.jsonl` (repo-local action traces for grid and verification tools)
-
-Event shape:
-
-- `timestamp`
-- `sessionId`
-- `taskId`
-- `stepId`
-- `startedAt`
-- `endedAt`
-- `status`
-- `action`
-- `payload`
-- `dryRun`
-- `result`
-- `errorCode`
-- `durationMs`
-- `attempt`
-- `retryOf`
-
-Run-log event shape (repo-local):
-
-- `ts`
-- `action`
-- action-specific payload (`sessionId`, `cellId`, `absolute/relative`, `inView`, etc.)
-
-Quick inspection:
-
-```bash
-tail -n 50 logs/actions/run.jsonl
-```
-
-```bash
-rg -n '"action":"grid_' logs/actions/run.jsonl
-```
-
-KPI report via MCP tool:
-
-- `metrics_report` gives:
-  - `errorRate`
-  - `durations.p50Ms` / `durations.p95Ms`
-  - `loops.loopEvents` / `loops.retryAttempts`
-  - task completion stats (`tasks.*`) when `taskId` is present
-  - strict current-session view by default (`includeLegacy=false`)
-
-Trace export via MCP tool:
-
-- `session_trace_export` writes merged audit+run events to `logs/exports/*.json`
-  - defaults to strict current-session events; pass `includeLegacy=true` to include old rows missing `sessionId`
-
-## Common failure modes
-
-### No working Hyprland socket
-
-Symptom:
-
-- `No working Hyprland socket found under /run/user/$UID/hypr`
-
-Checks:
-
-- confirm Hyprland running for current user
-- list available sockets under `/run/user/$UID/hypr`
-- verify this process has permission to read/write the socket
+Use mapped, actionable windows only.
 
 ### Screenshot failure
 
-Symptom:
+Confirm `grim` works in the same user/Wayland session and the target still exists. Successful commands return a file path; inspect that file separately.
 
-- grim stderr output or `Not a PNG image`
+### Mouse input failure
 
-Checks:
+Confirm `ydotool.service` is active and its socket belongs to the current user at `/run/user/$UID/.ydotool_socket`.
 
-- confirm `grim` can run manually
-- verify target monitor/window exists
-- check if Wayland permission/session constraints changed
+### Grid reports no session
 
-### Tool call rejected for window
+Run `saarthi grid show`, inspect its image, then use cell commands. `saarthi grid hide` intentionally deletes the persisted session.
 
-Symptom:
+### App launch unexpectedly rate-limited
 
-- `Window not found`
-- `Window not actionable (hidden/unmapped)`
+Inspect `~/.local/state/saarthi/launch-timestamps.json`. Entries are milliseconds and are pruned to the trailing minute. Do not delete the state merely to bypass policy.
 
-Checks:
+### Overlay looks stuck
 
-- call `window_list` with `includeHidden: true`
-- use a mapped visible window id
+Complete the explicit task, then inspect service logs and `status.json`:
 
-### Vimium hints do not appear
+```bash
+saarthi overlay task-complete --status error
+journalctl --user -u saarthi-overlay.service -n 100 --no-pager
+```
 
-Symptom:
+### tmux refusal
 
-- `f` is sent but hint labels are not visible.
-
-Checks:
-
-- ensure target browser window is focused (`window_focus`)
-- exit active input/modal first (`escape` x2)
-- if still hidden, send literal `f` via `type_text` as fallback
-- capture screenshot and verify hints before continuing
-
-### Input field captures control keys
-
-Symptom:
-
-- navigation keys are inserted into search/input boxes instead of driving UI state.
-
-Checks:
-
-- clear active field before retrying
-- avoid typing URL/search text unless address/search target is explicitly focused
-- prefer `window`-target screenshots for verification to avoid active-window drift
-
-### Modal traps (confirmation dialogs)
-
-Symptom:
-
-- modal appears (for example "Clear search history?") and blocks normal navigation.
-
-Checks:
-
-- run Vimium hints on modal itself
-- select safe dismiss action (`Cancel`) unless destructive action is intended
-- verify modal closed before next step
-
-### ydotool installed but MCP mouse tools still fail
-
-Symptom:
-
-- `mouse_move`/`mouse_click` fail with ydotool socket error.
-
-Checks:
-
-- `systemctl is-active ydotool.service` should be `active`
-- ensure socket path is `/run/user/<uid>/.ydotool_socket`
-- ensure socket owner/group allows current user access
-- if socket appears under `/tmp/.ydotool_socket` owned by root, apply service override above
-
-## Field Learnings (Zen + WhatsApp + Vimium)
-
-1. Vimium-first is workable, but only with strict per-step verification screenshots.
-2. Focus drift is the primary failure source, not window discovery.
-3. Search input in WhatsApp can trap control flow; clear input before attempting mode switches.
-4. `mouse_click` is required as deterministic recovery fallback when keyboard state becomes ambiguous.
-5. If `mouse_click` is unavailable (`ydotool` missing), recovery may require manual user intervention.
-
-## Recommended reliable sequence (for chat send tasks)
-
-1. `window_focus` target browser.
-2. `escape` twice.
-3. trigger Vimium hints (`key_press("f")` or fallback `type_text("f")`).
-4. screenshot and verify hint map.
-5. click category/chat target through hints.
-6. verify expected panel/chat header.
-7. trigger hints again and open message input.
-8. type message text.
-9. send (`enter`) only after final pre-send verification.
-
-## Safe rollout checklist
-
-1. Run smoke in dry-run mode.
-2. Run smoke with live mutations on a non-critical workspace.
-3. Validate audit JSONL entries are generated.
-4. Validate screenshot output in your MCP client.
+Use `saarthi tmux list --json` to resolve targets. Do not override `TMUX_PANE_BUSY` without user confirmation.

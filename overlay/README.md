@@ -1,80 +1,53 @@
-# saarthi overlay HUD
+# Saarthi Overlay HUD
 
-A small always-on-top desktop HUD that pops up in the top-right corner while
-saarthi is controlling the desktop, showing animated "thinking" eyes, the
-current action, and a live feed of recent steps.
+The overlay is an optional always-on-top HUD that shows Saarthi's active task, current command, and recent read/act steps. It is independent of the per-invocation CLI and is the only persistent Saarthi user service.
 
-It is a separate, optional process — the MCP server runs fine without it.
+## Data Flow
 
-## How it works
-
-```
-saarthi MCP server                      overlay host (this dir)
-──────────────────                      ───────────────────────
-registerTool wrapper (src/server.ts)
-  on every tool call emits  ──writes──▶  ~/.local/state/saarthi/status.json
-  { state, current, recent[] }            (atomic write)
-                                              │ Gio.FileMonitor (inotify)
-                                              ▼
-                                          host.py reads + pushes into
-                                          index.html via window.saarthiUpdate()
-                                          shows on "active", hides after idle
+```text
+saarthi CLI dispatch wrapper             overlay host
+recordStepStart / recordStepDone
+             writes atomically -> ~/.local/state/saarthi/status.json
+                                      |
+                                      v
+                              Gio.FileMonitor -> host.py -> index.html
 ```
 
-- **Rendering:** `index.html` — a self-contained web HUD (HTML/CSS/JS), no build
-  step, no network. Drives off `window.saarthiUpdate(snapshot)`.
-- **Host:** `host.py` — GTK 3 + `gtk-layer-shell` + WebKit2GTK 4.1 via PyGObject.
-  Anchors the page to the top-right on the `OVERLAY` layer, transparent and
-  click-through, never grabbing keyboard focus.
+`src/cli/execute.ts` emits command status. `src/lib/status.ts` persists explicit task lifecycle in `overlay-task.json` and writes `status.json` through a unique temp file plus rename. Separate CLI processes therefore share the task while each command settles its own current step.
 
-## Status contract
-
-`~/.local/state/saarthi/status.json`:
+## Status Contract
 
 ```jsonc
 {
-  "schema": 1,
-  "sessionId": "…",
+  "schema": 2,
+  "sessionId": "agent-run-id",
   "state": "active" | "idle",
   "updatedAt": "ISO-8601",
-  "current": { "id", "tool", "label", "kind", "state", "ts" } | null,
-  "recent":  [ /* last 6 steps, oldest→newest */ ]
+  "task": {
+    "id": "...",
+    "label": "desktop task",
+    "state": "working" | "waiting" | "dormant_waiting" | "complete" | "error" | "timeout",
+    "stats": { "steps": 0, "reads": 0, "acts": 0, "errors": 0, "retries": 0 }
+  } | null,
+  "current": { "id": 1, "tool": "window_list", "label": "...", "kind": "read", "state": "running", "ts": "..." } | null,
+  "recent": []
 }
 ```
 
-`kind` is `"read"` or `"act"` (derived from each tool's `readOnlyHint`);
-step `state` is `"running" | "done" | "error"`.
-
-The server stops emitting if `SAARTHI_STATUS=0` is set.
-
-**Privacy:** typed text is shown in the feed (`Typing "…"`). Mask it per call
-with the `sensitive: true` argument on `type_text` / `window_focus_and_type`, or
-globally with `SAARTHI_REDACT_TYPED=1` (renders `Typing (hidden)`). Audit logs and
-tool results only ever record the text *length*, never the text itself.
-
-## Requirements (Fedora + Hyprland — all preinstalled here)
-
-- `python3` + PyGObject (`python3-gobject`)
-- `gtk3`, `gtk-layer-shell`, `webkit2gtk4.1`
-- a `wlr-layer-shell` compositor (Hyprland)
+Set `SAARTHI_STATUS=0` to suppress writes. Set `SAARTHI_REDACT_TYPED=1`, or pass `--sensitive` to input commands, to hide typed content from status labels. Audit payloads record text length rather than text.
 
 ## Run
 
-```bash
-# live — follows the status file written by the MCP server
-pnpm overlay
-# or: python3 overlay/host.py
+Requirements on Fedora/Hyprland are Python 3 with PyGObject, GTK 3, gtk-layer-shell, and WebKit2GTK 4.1.
 
-# standalone visual demo (no MCP server needed)
+```bash
+pnpm overlay
 pnpm overlay:demo
 ```
 
-Preview the HUD in any browser without GTK: open `index.html?demo=1`.
+The demo does not read live command state. `index.html?demo=1` can also be opened directly for browser preview.
 
-## User service
-
-The overlay should be the persistent user service. MCP remains stdio-only and is
-started by each MCP host/client session.
+## User Service
 
 ```bash
 /home/snehit/projects/saarthi/scripts/install-overlay-service.sh
@@ -83,8 +56,8 @@ systemctl --user status saarthi-overlay.service --no-pager
 journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ```
 
+Do not create a Saarthi command/server systemd unit.
+
 ## Tuning
 
-In `host.py`: `IDLE_LINGER_MS` (how long it stays after going idle),
-`TOP_MARGIN` / `RIGHT_MARGIN` (placement). Card width and colors live in the
-`:root` CSS block of `index.html`.
+`host.py` owns `IDLE_LINGER_MS`, `TOP_MARGIN`, and `RIGHT_MARGIN`. Card geometry and colors are CSS variables in `index.html`.
