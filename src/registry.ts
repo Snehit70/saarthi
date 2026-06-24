@@ -64,12 +64,16 @@ export class ToolRegistry {
   private readonly tools = new Map<string, RegisteredTool>();
   private readonly commands = new Map<string, RegisteredTool>();
 
-  registerTool(name: string, config: ToolConfig, handler: ToolHandler): void {
+  registerTool<Shape extends z.ZodRawShape>(
+    name: string,
+    config: ToolConfig & { inputSchema: Shape },
+    handler: (args: z.infer<z.ZodObject<Shape>>) => ToolResult | Promise<ToolResult>,
+  ): void {
     const [noun, verb] = commandFor(name);
     const commandKey = `${noun} ${verb}`;
     if (this.tools.has(name)) throw new Error(`Tool already registered: ${name}`);
     if (this.commands.has(commandKey)) throw new Error(`Command already registered: ${commandKey}`);
-    const tool = { name, noun, verb, config, handler };
+    const tool = { name, noun, verb, config, handler: handler as ToolHandler };
     this.tools.set(name, tool);
     this.commands.set(commandKey, tool);
   }
