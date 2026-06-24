@@ -6,7 +6,9 @@ describe("CLI package contract", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     expect(pkg.bin).toEqual({ saarthi: "dist/src/cli.js" });
     expect(pkg.scripts.build).toContain("chmod +x dist/src/cli.js");
-    expect(readFileSync("src/cli.ts", "utf8")).toMatch(/^#!\/usr\/bin\/env node/);
+    const entry = readFileSync("src/cli.ts", "utf8");
+    expect(entry).toMatch(/^#!\/usr\/bin\/env node/);
+    expect(entry.indexOf('process.on("exit"')).toBeLessThan(entry.indexOf("await executeCli"));
     if (statSync("dist/src/cli.js", { throwIfNoEntry: false })) {
       expect(statSync("dist/src/cli.js").mode & 0o111).not.toBe(0);
     }
