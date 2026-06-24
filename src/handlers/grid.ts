@@ -11,8 +11,8 @@ import type { WindowId } from "../lib/types.js";
 import { commandExists, sleep } from "../lib/util.js";
 import { cellToRelativePoint, ensureGridSessionFresh, resolveTargetOrigin } from "../lib/pointer.js";
 import { performMouseClick, performMouseMove } from "../lib/mouse.js";
-import { server } from "../server.js";
-import { gridSession, screenshotDirDefault } from "../runtime.js";
+import { server } from "../registry.js";
+import { clearGridSession, gridSession, persistGridSession, screenshotDirDefault } from "../runtime.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -117,6 +117,7 @@ server.registerTool(
       originAbsoluteX: origin.originX,
       originAbsoluteY: origin.originY,
     };
+    persistGridSession(gridSession.current);
 
     await logRunEvent({
       action: "grid_show",
@@ -134,20 +135,7 @@ server.registerTool(
       content: [
         {
           type: "text",
-          text: JSON.stringify(
-            {
-              sessionId: gridSession.current.id,
-              target,
-              cols: density.cols,
-              rows: density.rows,
-              width: shot.width,
-              height: shot.height,
-              sourcePath,
-              gridPath,
-            },
-            null,
-            2,
-          ),
+          text: gridPath,
         },
       ],
       structuredContent: {
@@ -184,6 +172,7 @@ server.registerTool(
       throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
     }
     gridSession.current = await ensureGridSessionFresh(gridSession.current);
+    persistGridSession(gridSession.current);
     const point = cellToRelativePoint(gridSession.current, cellId);
     const payload = {
       sessionId: gridSession.current.id,
@@ -224,6 +213,7 @@ server.registerTool(
   async ({ cellId, insetPx }) => {
     if (!gridSession.current) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
     const session = await ensureGridSessionFresh(gridSession.current);
+    persistGridSession(session);
     const rows = session.rows;
     const cols = session.cols;
     const maxCell = rows * cols;
@@ -265,6 +255,7 @@ server.registerTool(
   async ({ cellId, settleMs }) => {
     if (!gridSession.current) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
     gridSession.current = await ensureGridSessionFresh(gridSession.current);
+    persistGridSession(gridSession.current);
     const point = cellToRelativePoint(gridSession.current, cellId);
     const absX = gridSession.current.originAbsoluteX + point.x;
     const absY = gridSession.current.originAbsoluteY + point.y;
@@ -299,6 +290,7 @@ server.registerTool(
   async ({ cellId, button, settleMs }) => {
     if (!gridSession.current) throw new HyprlandError("WINDOW_NOT_FOUND", "No active grid session. Call grid_show first.");
     gridSession.current = await ensureGridSessionFresh(gridSession.current);
+    persistGridSession(gridSession.current);
     const point = cellToRelativePoint(gridSession.current, cellId);
     const absX = gridSession.current.originAbsoluteX + point.x;
     const absY = gridSession.current.originAbsoluteY + point.y;
@@ -327,7 +319,7 @@ server.registerTool(
   },
   async () => {
     const previous = gridSession.current;
-    gridSession.current = null;
+    clearGridSession();
     await logRunEvent({ action: "grid_hide", previousSessionId: previous?.id ?? null });
     return {
       content: [{ type: "text", text: JSON.stringify({ cleared: true, previousSessionId: previous?.id ?? null }, null, 2) }],

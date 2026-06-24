@@ -31,4 +31,4 @@ echo "  systemctl --user restart $UNIT_NAME"
 echo "  systemctl --user status $UNIT_NAME --no-pager"
 echo "  journalctl --user -u $UNIT_NAME -n 100 --no-pager"
 echo
-echo "MCP remains stdio per client session; do not start $OLD_UNIT_NAME."
+echo "Saarthi is a CLI; do not start the removed $OLD_UNIT_NAME."

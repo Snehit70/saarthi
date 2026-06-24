@@ -11,7 +11,7 @@ import {
   TmuxError,
   tmuxAvailable,
 } from "../lib/tmux.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
 function tmuxErrorCode(err: unknown): string {

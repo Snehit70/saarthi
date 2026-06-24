@@ -11,7 +11,7 @@ import {
 } from "../lib/hyprland.js";
 import { isNumericWorkspaceName } from "../lib/util.js";
 import { pickWorkspaceForMonitor } from "../lib/workspace.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun, policy } from "../runtime.js";
 
 server.registerTool(

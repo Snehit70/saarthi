@@ -1,136 +1,68 @@
-# saarthi Architecture
-
-## Purpose
-
-`saarthi` is a local MCP server for Hyprland desktop operations and agentic UI automation. Its surface (44 tools) covers:
-
-- inspect desktop, windows, and workspace/monitor topology
-- query windows by class/title/focus/workspace and rank/pick best targets
-- capture screenshots (full, monitor, window, area, grid cell)
-- focus/move/resize windows and move them across workspaces
-- launch apps under policy, then wait for and verify the resulting window
-- keyboard typing and key presses
-- mouse move/click/scroll, including grid-based and OCR-text-based targeting
-- on-screen text search (`tesseract` OCR) and text-anchored clicking
-- composite act-and-verify primitives (`action_step`, `click_wait_retry`)
-- telemetry, trace export, and KPI metrics reporting
-
-The server intentionally still does **not** expose shell execution, clipboard access, or network/remote transport. Earlier v1 docs described input automation and app launch as out of scope; that is no longer accurate — those capabilities now ship behind policy and audit controls.
+# Saarthi Architecture
 
 ## Runtime Model
 
-- Transport: MCP stdio
-- Process model: one Node process serving one MCP host connection
-- Host user: current desktop user (required for Hyprland socket access)
-- Target environment: Linux + Wayland + Hyprland
+Saarthi is an installed Node.js CLI for one local Hyprland user session. Each `saarthi <noun> <verb>` invocation is a fresh process. There is no daemon, MCP transport, HTTP endpoint, remote bridge, arbitrary shell tool, or clipboard tool.
 
-## High-level Data Flow
+The independent eyes HUD remains a user systemd service and reads `~/.local/state/saarthi/status.json`.
 
-1. MCP host sends tool call over stdio.
-2. The matching `src/handlers/*` tool handler validates input with `zod` schemas and dispatches to adapters.
-3. Hyprland adapter resolves live compositor signature from `/run/user/$UID/hypr/*/.socket.sock`.
-4. Adapter executes `hyprctl` or `grim` with `execFile` (no shell interpolation).
-5. Response is normalized to MCP `content` + optional `structuredContent`.
-6. Mutating tools append JSONL audit events.
+## Command Flow
 
-## Module Layout
+1. `src/cli.ts` loads `src/register-tools.ts` and the command registry.
+2. `src/cli/execute.ts` resolves the noun/verb, parses argv, and validates it through the command's zod schema.
+3. The dispatch wrapper emits overlay start/done state and invokes the registered handler.
+4. Handlers call adapters in `src/lib/*`.
+5. Adapters use `execFile` argument arrays to call Hyprland and local utilities.
+6. The CLI prints human text or the existing `structuredContent` under `--json`.
+7. Errors go to stderr with stable categorized exit codes.
 
-Entry and shared runtime:
+## Registry
 
-- `src/index.ts`: thin entry — imports the handler modules (which register tools on import) and connects the stdio transport.
-- `src/server.ts`: the single `McpServer` instance. It also wraps `registerTool` once to emit a live status feed (active/idle + read/act kind) for the overlay HUD; emission is best-effort and never alters tool results.
-- `src/runtime.ts`: shared runtime state/config singletons (dry-run flag, session id, log paths, loaded policy, launch rate limiter, and the mutable grid-session holder).
+`src/registry.ts` is an in-house registry whose `registerTool(name, config, handler)` shape matches the removed frontend. Existing handler bodies and zod `inputSchema` objects remain the single source of truth.
 
-Tool handlers (one module per domain, each registers its tools on import):
+Tool registry keys remain snake_case internally for audit continuity. `src/registry.ts` maps them to public `saarthi <noun> <kebab-case-verb>` commands, with explicit mappings where the old name did not encode the intended noun.
 
-- `src/handlers/apps.ts`, `windows.ts`, `workspaces.ts`, `screenshots.ts`, `input.ts`, `mouse.ts`, `grid.ts`, `text.ts`, `observability.ts`, `composite.ts`.
-- `src/handlers/observe.ts`: `wait_for_text`, `wait_for_stable`, `screenshot_compare` (reliability / verification).
-- `src/handlers/perception.ts`: `ui_find`, `ui_tree` (accessibility-tree introspection).
+Generated root, noun, and command help comes from this registry and its zod shapes.
 
-Adapters and helpers (`src/lib/`):
+## Modules
 
-- `hyprland.ts`: Hyprland discovery, JSON query, dispatch execution, normalization.
-- `screenshot.ts`: screenshot capture and PNG extraction.
-- `image.ts`: PNG metadata parse and monitor/window geometry helpers.
-- `grid.ts`: grid overlay cell/point/rect geometry helpers.
-- `pointer.ts`: pointer/grid target resolution and window-wait helpers.
-- `mouse.ts`: mouse move/click/scroll/drag and eased movement via `ydotool`/`hyprctl`.
-- `text-locate.ts`: OCR-based on-screen text search and click-point resolution.
-- `ocr.ts`: tesseract TSV parsing.
-- `atspi.ts`: runs the AT-SPI query helper and parses its JSON (perception).
-- `diff.ts`: image diffing via `magick compare` (normalised RMSE).
-- `status.ts`: best-effort status feed written to `status.json` for the overlay HUD.
-- `humanize.ts`: tool name + args -> human-readable status labels (with secret redaction).
-- `input.ts`: keyboard key/modifier normalization and typed-text sanitization.
-- `apps.ts`: app catalog, launch-command resolution, and launch rate limiter.
-- `workspace.ts`: empty-workspace selection within policy bounds.
-- `policy.ts`: launch policy loading, command parsing, alias resolution.
-- `audit.ts`: append-only audit logger.
-- `runlog.ts`: repo-local action trace log writer.
-- `util.ts`: generic helpers (sleep, JSONL read, command existence, numeric parsing).
-- `types.ts`: shared type definitions.
+- `src/cli.ts`: executable entry with node shebang.
+- `src/cli/execute.ts`: help, argv parsing, zod validation, dispatch, output, and exit mapping.
+- `src/registry.ts`: command registration and noun/verb mapping.
+- `src/register-tools.ts`: explicit registration imports for all handler domains.
+- `src/handlers/*`: 62 command handlers grouped by domain.
+- `src/lib/*`: Hyprland, screenshot, input, OCR, accessibility, browser, tmux, policy, state, audit, and telemetry adapters.
+- `scripts/cli-smoke.ts`: built-binary command/help smoke harness.
 
-Other:
+## Cross-Invocation State
 
-- `config/policy.json`: launch policy config (allowed aliases, denied patterns, rate limit, workspace bounds).
-- `scripts/smoke-test.ts`: stdio smoke validation via MCP client.
-- `scripts/atspi_query.py`: AT-SPI accessibility-tree walker (PyGObject) emitting JSON; invoked by `lib/atspi.ts`.
-- `overlay/`: optional desktop HUD (web UI + Python `gtk-layer-shell`/WebKit host) that renders the status feed. See `overlay/README.md`.
+Process-local state from the old long-lived frontend is externalized under `~/.local/state/saarthi/`:
 
-## Hyprland Socket Strategy
+- grid session: persisted by `grid show`, refreshed by cell commands, removed by `grid hide`
+- launch timestamps: locked, pruned to the trailing minute, and atomically rewritten
+- session id: read from `SAARTHI_SESSION_ID`, otherwise generated per invocation
+- overlay task: persisted by task start/ping/complete
 
-The server does not trust `HYPRLAND_INSTANCE_SIGNATURE` alone. It:
+State and status snapshots use unique temporary files plus rename. Launch rate-limit updates also use a filesystem lock to prevent separate processes from racing through the policy cap.
 
-1. lists `/run/user/$UID/hypr/*/.socket.sock`
-2. prefers env signature first if present
-3. probes each candidate with `hyprctl -j version`
-4. uses the first working signature
+## Output And Errors
 
-This handles stale env signatures and compositor restarts.
+Human output uses the first text result. `--json` emits `structuredContent` verbatim. Screenshot commands write PNG files and include a path; they never emit inline base64 image content.
 
-## Error Semantics
+Validation failures exit `2`. Hyprland, screenshot, input, OCR, app-launch, action-timeout, and tmux failures map to stable non-zero categories defined in `src/cli/execute.ts`.
 
-- Tool-level validation errors: returned as MCP tool call errors.
-- Hyprland adapter failures: raised as `HyprlandError`.
-- Startup fatal errors: printed to stderr and process exits non-zero.
+## Safety Boundaries
 
-## Output Shapes
+- `config/policy.json` controls app aliases, blocked command patterns, launch caps, and workspace bounds.
+- All mutating handlers retain audit events and act-then-verify behavior.
+- Window actions resolve live Hyprland state and reject missing/hidden targets.
+- Dispatcher construction is centralized in `src/lib/hyprland.ts` and uses Hyprland 0.55+ Lua expressions.
+- `hyprctl` stdout beginning with `error:` is a failure even when its process exit code is zero.
 
-- Read tools return both human-readable JSON text and machine-readable `structuredContent`.
-- Screenshot tool returns image content (`image/png`, base64) plus metadata text payload.
-- Mutating tools return command outcome text (or dry-run command summary).
+## Test Architecture
 
-## Window Screenshot Correctness
-
-For `target = "window"` and `target = "active_window"`, capture is workspace-aware:
-
-1. resolve target window metadata
-2. record current focused workspace
-3. switch to target workspace (if different)
-4. focus target window by address
-5. refresh window geometry from live state
-6. run `grim -g ...`
-7. restore original workspace
-
-This avoids stale-geometry captures from the currently visible workspace.
-
-## Composition Pattern
-
-This server is intentionally primitive-first so agents can chain actions:
-
-1. discover candidates with `window_find`
-2. validate exact target with `window_get` or `window_list`
-3. act via `window_focus`, `desktop_screenshot`, `window_move`, `window_resize`, `workspace_focus`, or `window_send_to_workspace`
-
-Example chain for a semantic request like "screenshot zathura":
-
-- `window_find(classContains=\"zathura\", limit=1)` -> get `windowId`
-- `desktop_screenshot(target=\"window\", windowId=<id>)`
-
-## Non-goals
-
-- Multi-compositor support (GNOME/KWin/Sway)
-- Remote/HTTP transport
-- session-user isolation bridge
-- arbitrary shell execution
-- clipboard access
+- Pure adapter tests verify domain behavior without coupling to CLI internals.
+- CLI tests exercise public argv, stdout/stderr, JSON, help, coercion, positional arguments, and exit codes.
+- State/status tests use real temporary files and independent limiter instances.
+- `test/registry-contract.test.ts` snapshots all 62 registry keys and rejects command collisions.
+- `scripts/cli-smoke.ts` drives the built binary, checks help for every command, and invokes every read-only command with `--json` against deterministic system-boundary fixtures.

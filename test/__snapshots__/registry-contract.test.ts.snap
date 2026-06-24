@@ -1,0 +1,316 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CLI registry contract > matches the committed command and zod schema snapshot 1`] = `
+[
+  {
+    "command": "composite action-step",
+    "schemaSha256": "4654b3a7bc5633bf62350953d55d4c2527a0615f25bdb3ffe389db3ffe153e03",
+    "tool": "action_step",
+  },
+  {
+    "command": "composite verify-window-state",
+    "schemaSha256": "8d5e7afeb5594da1414dbd289844903ce9a7ccc4f15081a1a83ba0e1a56bf72d",
+    "tool": "action_verify_window_state",
+  },
+  {
+    "command": "app launch",
+    "schemaSha256": "ca7cc0a82f2a6f6476650364524182cfec8cb6dc2f14f687a928d2b9afa2b701",
+    "tool": "app_launch",
+  },
+  {
+    "command": "app launch-and-wait",
+    "schemaSha256": "c276fb3d7b0b8dfce48b3b6aa5fa24767b969ad9e0ffcbe39b7c8d983571b236",
+    "tool": "app_launch_and_wait",
+  },
+  {
+    "command": "app list",
+    "schemaSha256": "8b71fd08dc5bf080f864bd11b4dcf216546af1c48ef73eab1ce538b2c3eaa11e",
+    "tool": "app_list",
+  },
+  {
+    "command": "browser discover",
+    "schemaSha256": "8fa76877ae1f65e2ca7eb1e57adb5e1e6134ff96b260684ff61f6f54fd795254",
+    "tool": "browser_discover",
+  },
+  {
+    "command": "browser focus",
+    "schemaSha256": "ee80e17f461cf1fccf55f935b34b4a0e9bf2fc4ed2f98fcd215b886675469e6c",
+    "tool": "browser_focus",
+  },
+  {
+    "command": "browser open-url",
+    "schemaSha256": "49656314d18f2477c8e0a43835efd9d1176e5db80e782e4acb00cf1c556c2941",
+    "tool": "browser_open_url",
+  },
+  {
+    "command": "browser space-step",
+    "schemaSha256": "ceec8a3aeb7d309b429c1609e88d9e524703af262103624839c480f0939f2d58",
+    "tool": "browser_space_step",
+  },
+  {
+    "command": "browser vimium-hint",
+    "schemaSha256": "1024ddf24103605c6e286bef06548cb62643013bddda239a742646791d58b0e0",
+    "tool": "browser_vimium_hint",
+  },
+  {
+    "command": "text click",
+    "schemaSha256": "73ee0cfaf2664c5a7c6836cd46eeee25bf37b44dfa86e2d67ef5bd2aeb07b8df",
+    "tool": "click_text",
+  },
+  {
+    "command": "composite click-wait-retry",
+    "schemaSha256": "235a8a7f2a0391019425ba4b104a11cca5d82c05621fd2c17514fe65f7cc7e6e",
+    "tool": "click_wait_retry",
+  },
+  {
+    "command": "observability desktop-health",
+    "schemaSha256": "62fcaf939d39c8d08b28cd1b59e8212152ef551d34aa41787ebfbf31817cc3ce",
+    "tool": "desktop_health",
+  },
+  {
+    "command": "screenshot capture",
+    "schemaSha256": "053d00c0aa49c9ac8ea959d92ca3ced293d23a58023c0e6e3caa0598ee1fe78b",
+    "tool": "desktop_screenshot",
+  },
+  {
+    "command": "screenshot area",
+    "schemaSha256": "99b9bc4543012de20686f75b6526060f070463c4920ff3d045e66405e3e9fca1",
+    "tool": "desktop_screenshot_area",
+  },
+  {
+    "command": "screenshot save",
+    "schemaSha256": "85d4e993987063025a5b6ec0d4896a214a6f805c9de59b56a2efca83ddf94072",
+    "tool": "desktop_screenshot_save",
+  },
+  {
+    "command": "text find",
+    "schemaSha256": "38d9be45f7aa9ef0ac8d9f35b9155f3cf0e321c5870397cd78a0373406619879",
+    "tool": "find_text_on_screen",
+  },
+  {
+    "command": "grid cell-rect",
+    "schemaSha256": "f96cf7a25583a557981a095c4e97dbc292bd972615bfbf63234e5b35b15041d1",
+    "tool": "grid_cell_rect",
+  },
+  {
+    "command": "grid cell-to-point",
+    "schemaSha256": "9a06ca48198da6ef5307a56358e9231b5483235b27ccee3a91bd1a9e21111bc0",
+    "tool": "grid_cell_to_point",
+  },
+  {
+    "command": "grid click",
+    "schemaSha256": "415aeee1019fc1bbb1bfe02535dbd6cdf7f292b223fc347751ac9b8317e51547",
+    "tool": "grid_click",
+  },
+  {
+    "command": "grid hide",
+    "schemaSha256": "3b2f61975671d5e517751d084138ccddc3128c218c0fc5198900fc6a79aafb8c",
+    "tool": "grid_hide",
+  },
+  {
+    "command": "grid move",
+    "schemaSha256": "9ec8db20e468431c5f79b943cd0d6c8bfa774c005c484dbffc31cd7dfefce2ad",
+    "tool": "grid_move",
+  },
+  {
+    "command": "grid show",
+    "schemaSha256": "1670363534f044f012a67f8df4cde35c13e60c4cdab4c7f43f5bd857897cc9a7",
+    "tool": "grid_show",
+  },
+  {
+    "command": "input key-press",
+    "schemaSha256": "3ed3c46245c85ca44bd048925b8c011e372f94a63bb88983cc3e55196cbd7f46",
+    "tool": "key_press",
+  },
+  {
+    "command": "observability metrics-report",
+    "schemaSha256": "baa7fb893aa52aec753bcaa1121e5c51d65ba3295d8d9918d0b9f4b3e8ce415c",
+    "tool": "metrics_report",
+  },
+  {
+    "command": "mouse click",
+    "schemaSha256": "d534638cc564079781fa11e34aca572319e5be379a3ed265f3eb26e6ef7d14c0",
+    "tool": "mouse_click",
+  },
+  {
+    "command": "mouse drag",
+    "schemaSha256": "213fef25f2622fdf7445d698a0d5ca3a2d89867f50babee90b0c83b296a9866b",
+    "tool": "mouse_drag",
+  },
+  {
+    "command": "mouse get-position",
+    "schemaSha256": "709467fd5058197d79d59f6f509be031f2162baffa468bf546b3a41b0674937e",
+    "tool": "mouse_get_position",
+  },
+  {
+    "command": "mouse move",
+    "schemaSha256": "01888a04267a8463b66056492dbba50f3dd270ecbf8e46880e01977420aed27c",
+    "tool": "mouse_move",
+  },
+  {
+    "command": "mouse move-to-text",
+    "schemaSha256": "98bc7702d9cd28ae3d2c44a4c3d3779c7e567b460229c7c8731eaffe8b5f0702",
+    "tool": "mouse_move_to_text",
+  },
+  {
+    "command": "mouse scroll",
+    "schemaSha256": "a1f1c45a9be6d28bb15e71f6f7969f481b664a68b08b528545c4b8191dae8f99",
+    "tool": "mouse_scroll",
+  },
+  {
+    "command": "mouse verify-in-view",
+    "schemaSha256": "68f8e8ce4f3870fdcc8dc30ab64a099ffb2d92b6dd20b8efc3707fe45fbfdb8e",
+    "tool": "mouse_verify_in_view",
+  },
+  {
+    "command": "overlay task-complete",
+    "schemaSha256": "182348a5e961ead08ceeb2f4010a4d7353a7a38e7ffba386cecb275593d0c807",
+    "tool": "overlay_task_complete",
+  },
+  {
+    "command": "overlay task-ping",
+    "schemaSha256": "59ae616b0a89fc004271d8e051e529938039b7e683601aec435019c6157995ff",
+    "tool": "overlay_task_ping",
+  },
+  {
+    "command": "overlay task-start",
+    "schemaSha256": "b90669fc68f5d1179d63f0c47315bce3cbaf6454e7213adfe0379248fb1fb250",
+    "tool": "overlay_task_start",
+  },
+  {
+    "command": "text resolve-point",
+    "schemaSha256": "1c5861a92d2d544d743f4c34cf087811878a6b67fab94f57f14e367f36137d6d",
+    "tool": "resolve_text_point",
+  },
+  {
+    "command": "observe screenshot-compare",
+    "schemaSha256": "2df5796559b1bd1fa8f1ac19548e66df13ebb1441677d7001cf3805b319aa0d7",
+    "tool": "screenshot_compare",
+  },
+  {
+    "command": "observability session-trace-export",
+    "schemaSha256": "c2e0da65af30409fa3ce327169cdbb338daf85d114fed6d97caeeadc8dff808d",
+    "tool": "session_trace_export",
+  },
+  {
+    "command": "tmux capture",
+    "schemaSha256": "3604936cdbc3e53332920df227b86fafdd4e402e363c3b8c19c49424580a910b",
+    "tool": "tmux_capture",
+  },
+  {
+    "command": "tmux list",
+    "schemaSha256": "c674f939f6416d7a4e23f7ab58d9a31b8f78578984d4dfa94a1ed4adce8a317c",
+    "tool": "tmux_list",
+  },
+  {
+    "command": "tmux run-command",
+    "schemaSha256": "7be2704f25a4c777fa3c02b0456d07cf58b618f4fe51b259a6d6ee1b1eb69d33",
+    "tool": "tmux_run_command",
+  },
+  {
+    "command": "tmux send-keys",
+    "schemaSha256": "77e9132e83922e27d655f3591d2d0b2228ce9d7d2efb77cae2dc111360e32cba",
+    "tool": "tmux_send_keys",
+  },
+  {
+    "command": "input type",
+    "schemaSha256": "9bf76368e7db410bcf84ff211d292c5bc3bc6a2fcfc963b4c57e0e5b4973ead8",
+    "tool": "type_text",
+  },
+  {
+    "command": "ui find",
+    "schemaSha256": "c2e390be1d2a8a6aec3d7df1a08b3c1ca9a5b5cdefd1f0065987bdc27eca15e0",
+    "tool": "ui_find",
+  },
+  {
+    "command": "ui tree",
+    "schemaSha256": "14c6a82df43d22c2ae98834d017ee1bb21344ef3e34ba5034c81b5119262912a",
+    "tool": "ui_tree",
+  },
+  {
+    "command": "observe wait-for-stable",
+    "schemaSha256": "facdceeaa213751f5c507d3db605df0333e71519644fd566d3d85d52932fcfde",
+    "tool": "wait_for_stable",
+  },
+  {
+    "command": "observe wait-for-text",
+    "schemaSha256": "8fd6762c269653fd32be9ad862ab3b1bef4996509e062a54b0f50f6d87c0c183",
+    "tool": "wait_for_text",
+  },
+  {
+    "command": "window find",
+    "schemaSha256": "8ba6ea755d1afe0b59cdb9680ba69b8d2947161799c1797c303f1284781f9249",
+    "tool": "window_find",
+  },
+  {
+    "command": "window focus",
+    "schemaSha256": "29622ce1b9a6449d773c7f731eb052a9f69a845e3f2e3742565e299f68b7eec1",
+    "tool": "window_focus",
+  },
+  {
+    "command": "input focus-and-type",
+    "schemaSha256": "b520e712dd5e4c919f4124bc23c53a82a40038bfee6e7248fbe934bf8a9da871",
+    "tool": "window_focus_and_type",
+  },
+  {
+    "command": "window focus-best",
+    "schemaSha256": "680ee0bd21d2fae6fc61810375b96a235c3e58d86e92bfd27e91f342c5941b82",
+    "tool": "window_focus_best",
+  },
+  {
+    "command": "window get",
+    "schemaSha256": "828218853a66d28d27519602175a86dec60630991bf5848327e14a1c76af1d73",
+    "tool": "window_get",
+  },
+  {
+    "command": "window list",
+    "schemaSha256": "6dcc78c4cb37acfcac509b8e0195f0d1bd63b1575b646603f86b5801f07e887e",
+    "tool": "window_list",
+  },
+  {
+    "command": "window move",
+    "schemaSha256": "a366afa972ded291b0d199d65a1f03431b5c4f22a387899b50a75ecace6e0a64",
+    "tool": "window_move",
+  },
+  {
+    "command": "window resize",
+    "schemaSha256": "1bf606b4acee0b21d69acdc90f67b66dfbd192dcc38f53825f87f3ff31d08b28",
+    "tool": "window_resize",
+  },
+  {
+    "command": "window send-to-workspace",
+    "schemaSha256": "e55434fdc2f2bbadb2552a9fa720942b8bb95258cde7a491d1788d34fd6fac2e",
+    "tool": "window_send_to_workspace",
+  },
+  {
+    "command": "window wait-for",
+    "schemaSha256": "60fb309b4c4367ddced2b74ed8ce54ad9b793a93666e6e3d3a3a3489b1447ff9",
+    "tool": "window_wait_for",
+  },
+  {
+    "command": "workspace focus",
+    "schemaSha256": "a9da11561b9c2350ae5274b18ffcbe8c6c194badd5cc46770a49d24a504b3a2d",
+    "tool": "workspace_focus",
+  },
+  {
+    "command": "workspace focus-relative",
+    "schemaSha256": "437d4cf9bb231406e1ca20a36f64640bcfe27090fe854982a2e3d0675f7e708c",
+    "tool": "workspace_focus_relative",
+  },
+  {
+    "command": "workspace list",
+    "schemaSha256": "82bc972dcfa797321d7f193a87955541c83b1dc49776a31b6dd713035e419442",
+    "tool": "workspace_list",
+  },
+  {
+    "command": "workspace pick-empty",
+    "schemaSha256": "804f6128ce4414bf6d4326f4b44df7e26313e4914a1cb035885528533d35506a",
+    "tool": "workspace_pick_empty",
+  },
+  {
+    "command": "workspace topology",
+    "schemaSha256": "bef1958ea241d900e2b6dfa9db19ecfdfc7a0969bb5ce86628e0aff39ef1e288",
+    "tool": "workspace_topology",
+  },
+]
+`;

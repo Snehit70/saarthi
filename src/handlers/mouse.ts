@@ -6,7 +6,7 @@ import type { WindowId } from "../lib/types.js";
 import { sleep } from "../lib/util.js";
 import { resolvePointerCoordinates, resolveTargetBounds } from "../lib/pointer.js";
 import { performEasedMove, performMouseClick, performMouseDrag, performMouseMove, performMouseScroll } from "../lib/mouse.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
 server.registerTool(

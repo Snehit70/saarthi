@@ -22,7 +22,7 @@ import {
 import type { WindowId } from "../lib/types.js";
 import { toNumberOrNull } from "../lib/util.js";
 import { waitForWindow } from "../lib/pointer.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
 server.registerTool(

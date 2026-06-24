@@ -4,6 +4,7 @@ import { HyprlandError } from "./hyprland.js";
 import type { LaunchPolicy } from "./policy.js";
 import { parseLaunchCommand } from "./policy.js";
 import { commandExists } from "./util.js";
+import { readStateSync, statePath, withStateLockSync, writeStateAtomicSync } from "./state.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,4 +67,23 @@ export function createLaunchRateLimiter(maxLaunchesPerMinute: number): () => voi
     }
     timestampsMs.push(now);
   };
+}
+
+export function createPersistentLaunchRateLimiter(
+  maxLaunchesPerMinute: number,
+  path = statePath("launch-timestamps.json"),
+  nowMs: () => number = Date.now,
+): () => void {
+  return () => withStateLockSync(path, () => {
+    const now = nowMs();
+    const windowStart = now - 60_000;
+    const timestamps = (readStateSync<unknown[]>(path) ?? [])
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= windowStart)
+      .sort((a, b) => a - b);
+    if (timestamps.length >= maxLaunchesPerMinute) {
+      throw new HyprlandError("APP_LAUNCH_FAILED", `Launch rate limit exceeded (${maxLaunchesPerMinute}/min)`);
+    }
+    timestamps.push(now);
+    writeStateAtomicSync(path, timestamps);
+  });
 }

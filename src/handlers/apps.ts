@@ -11,7 +11,7 @@ import {
 import { parseLaunchCommand, resolveWorkspaceRange } from "../lib/policy.js";
 import { APP_CATALOG, isLaunchCommandAvailable, resolveAppLaunchCommand } from "../lib/apps.js";
 import { waitForWindow } from "../lib/pointer.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { assertLaunchRateLimit, dryRun, policy } from "../runtime.js";
 
 server.registerTool(

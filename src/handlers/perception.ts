@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { queryAtspi } from "../lib/atspi.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 

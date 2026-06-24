@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { audit } from "../lib/audit.js";
 import { captureScreenshot } from "../lib/screenshot.js";
 import type { WindowId } from "../lib/types.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun, screenshotDirDefault } from "../runtime.js";
 
 const execFileAsync = promisify(execFile);
@@ -30,29 +30,18 @@ server.registerTool(
   },
   async ({ target, monitorName, windowId }) => {
     const shot = await captureScreenshot({ target, monitorName, windowId: windowId as WindowId | undefined });
+    await mkdir(screenshotDirDefault, { recursive: true });
+    const path = join(screenshotDirDefault, `${new Date().toISOString().replace(/[:.]/g, "-")}-capture.png`);
+    await writeFile(path, shot.png);
+    await audit(
+      "desktop_screenshot",
+      { target, monitorName: monitorName ?? null, windowId: windowId ?? null, path, width: shot.width, height: shot.height },
+      dryRun,
+    );
     return {
-      content: [
-        {
-          type: "image",
-          data: shot.png.toString("base64"),
-          mimeType: "image/png",
-        },
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              width: shot.width,
-              height: shot.height,
-              target: shot.target,
-              geometry: shot.geometry,
-              monitorName: shot.monitorName ?? null,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
+      content: [{ type: "text", text: path }],
       structuredContent: {
+        path,
         width: shot.width,
         height: shot.height,
         target: shot.target,
@@ -99,7 +88,7 @@ server.registerTool(
     );
 
     return {
-      content: [{ type: "text", text: JSON.stringify({ path, width: shot.width, height: shot.height, target }, null, 2) }],
+      content: [{ type: "text", text: path }],
       structuredContent: { path, width: shot.width, height: shot.height, target },
     };
   },
@@ -138,7 +127,7 @@ server.registerTool(
     await execFileAsync("grim", ["-g", geometry, outPath]);
     await audit("desktop_screenshot_area", { x, y, width, height, path: outPath }, dryRun);
     return {
-      content: [{ type: "text", text: JSON.stringify({ path: outPath, geometry: { x, y, width, height } }, null, 2) }],
+      content: [{ type: "text", text: outPath }],
       structuredContent: { path: outPath, geometry: { x, y, width, height } },
     };
   },

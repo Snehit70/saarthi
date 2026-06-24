@@ -16,7 +16,7 @@ import {
 import { focusWindow, HyprlandError, listWindows, sendShortcut } from "../lib/hyprland.js";
 import { isLaunchCommandAvailable } from "../lib/apps.js";
 import { sanitizeTypedText } from "../lib/input.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { assertLaunchRateLimit, dryRun, policy } from "../runtime.js";
 
 type BrowserGatedAction = "read" | "navigate" | "type-field" | "send" | "commit-submit" | "destructive" | "payment";

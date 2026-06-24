@@ -5,7 +5,8 @@ import { audit } from "../lib/audit.js";
 import { healthCheck } from "../lib/hyprland.js";
 import { completeTask, pingTask, startTask } from "../lib/status.js";
 import { readJsonl } from "../lib/util.js";
-import { server } from "../server.js";
+import { projectRoot } from "../lib/paths.js";
+import { server } from "../registry.js";
 import { auditLogPath, runLogPath, SESSION_ID } from "../runtime.js";
 
 type LogEvent = Record<string, unknown>;
@@ -31,7 +32,7 @@ server.registerTool(
   "overlay_task_start",
   {
     title: "Overlay Task Start",
-    description: "Mark the beginning of a user-visible Saarthi task so the overlay stays present between MCP calls.",
+    description: "Mark the beginning of a user-visible Saarthi task so the overlay stays present between CLI commands.",
     inputSchema: {
       label: z.string().min(1).max(160).default("desktop task"),
     },
@@ -168,7 +169,7 @@ server.registerTool(
 
     const outPath =
       outputPath ??
-      join(process.cwd(), "logs", "exports", `${new Date().toISOString().replace(/[:.]/g, "-")}-trace-${(taskId ?? selectedSession).replace(/[^a-zA-Z0-9._-]/g, "_")}.json`);
+      join(projectRoot(), "logs", "exports", `${new Date().toISOString().replace(/[:.]/g, "-")}-trace-${(taskId ?? selectedSession).replace(/[^a-zA-Z0-9._-]/g, "_")}.json`);
     await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, JSON.stringify({ sessionId: selectedSession, taskId: taskId ?? null, count: merged.length, events: merged }, null, 2), "utf8");
 

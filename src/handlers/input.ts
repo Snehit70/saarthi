@@ -13,7 +13,7 @@ import {
   toHyprShortcutKey,
   toHyprShortcutMods,
 } from "../lib/input.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
 const execFileAsync = promisify(execFile);

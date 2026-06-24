@@ -1,5 +1,7 @@
 # Tool Contracts
 
+Headings use stable internal Action Step ids for audit compatibility. Invoke them through the public CLI command shown by `saarthi --help`; for example, `app_list` is `saarthi app list`, `desktop_health` is `saarthi observability desktop-health`, and `desktop_screenshot` is `saarthi screenshot capture`. Command help is authoritative for flags.
+
 ## Error format
 
 Operational errors raised by the Hyprland adapter use a stable prefixed format:
@@ -40,7 +42,7 @@ For Flatpak launch forms (`flatpak run <app-id>`), install detection validates a
 
 ### Inputs
 
-- `sessionId?: string` (defaults to current server session)
+- `sessionId?: string` (defaults to the current `SAARTHI_SESSION_ID` or invocation id)
 - `sinceIso?: string`
 - `lastN?: number` (default `5000`)
 - `includeLegacy?: boolean` (default `false`)
@@ -664,7 +666,7 @@ Validates actionable window, logs audit event, then dispatches through the Hyprl
 
 ## Dry-run mode
 
-Set `USE_MCP_DRY_RUN=1`.
+Set `SAARTHI_DRY_RUN=1`.
 
 In dry-run:
 

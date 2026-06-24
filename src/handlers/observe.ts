@@ -9,7 +9,7 @@ import { resolvePointerCoordinates } from "../lib/pointer.js";
 import { comparePngFiles } from "../lib/diff.js";
 import { sleep } from "../lib/util.js";
 import type { WindowId } from "../lib/types.js";
-import { server } from "../server.js";
+import { server } from "../registry.js";
 
 const TARGET = z.enum(["full", "monitor", "active_window", "window"]);
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };

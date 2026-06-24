@@ -1,203 +1,108 @@
-# saarthi
+# Saarthi
 
-Local MCP server for reliable Hyprland desktop control. Saarthi gives agents a
-small, auditable set of primitives for inspecting workspaces, launching allowed
-apps, moving/focusing windows, taking screenshots, reading UI text, and acting
-through mouse/keyboard input.
+Saarthi is a local Hyprland desktop-automation CLI. It exposes 62 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
 
-![Saarthi overlay HUD demo](./Screenshot_2026-06-05_15-50-00_13368.png)
+It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate the local Zen browser, and verify UI state. It intentionally does not expose arbitrary shell execution, clipboard access, remote transport, or an MCP server.
 
-## What It Does
+## Install
 
-- Inspect the live Wayland/Hyprland session, monitors, workspaces, and windows.
-- Capture full-screen, monitor, window, area, and grid-overlay screenshots.
-- Launch approved apps through `config/policy.json`.
-- Focus, move, resize, and send windows between workspaces.
-- Drive verified mouse, keyboard, OCR, accessibility-tree, and grid workflows.
-- Emit telemetry, audit events, and an optional desktop HUD while tools run.
-
-Saarthi is intentionally local and stdio-only: no remote transport, no shell
-execution tool, and no clipboard access.
-
-## Quick Start
+Requirements: Node.js 22+, pnpm, Hyprland, and the external tools needed by the commands you use (`hyprctl`, `grim`, `wtype`, `ydotool`, `tesseract`, ImageMagick, tmux, and AT-SPI Python bindings).
 
 ```bash
 pnpm install
-pnpm dev
-```
-
-`pnpm dev` starts the MCP server over stdio for the current MCP host/client
-session. Do not run the MCP server as a shared systemd service.
-
-Build and run the compiled server:
-
-```bash
 pnpm build
-pnpm start
+npm link
+saarthi --help
 ```
 
-## Requirements
+`package.json` installs `saarthi` from `dist/src/cli.js`. Re-run `pnpm build` after source changes; the linked command immediately uses the rebuilt file.
 
-- Linux Wayland session with Hyprland
-- Node 20+
-- `pnpm`
-- `hyprctl`
-- `grim`
-- `wtype` for `type_text`
-- `ydotool` for reliable mouse primitives
-- `tesseract` for OCR tools
-- ImageMagick `magick` for grid and screenshot comparison tools
-- `python3`, `python3-gobject`, `python3-pyatspi`, and a running AT-SPI bus for accessibility-tree tools
-
-Accessibility coverage is toolkit-dependent. GTK/Qt and many native apps expose
-useful trees; browser page content may not. OCR and grid tools are the fallback.
-
-## Tool Surface
-
-### Desktop And Observability
-
-- `desktop_health`
-- `metrics_report`
-- `session_trace_export`
-- `desktop_screenshot`
-- `desktop_screenshot_save`
-- `desktop_screenshot_area`
-- `screenshot_compare`
-
-### Workspaces And Windows
-
-- `workspace_list`
-- `workspace_topology`
-- `workspace_pick_empty`
-- `workspace_focus`
-- `workspace_focus_relative`
-- `window_list`
-- `window_get`
-- `window_find`
-- `window_wait_for`
-- `window_focus`
-- `window_focus_best`
-- `window_move`
-- `window_resize`
-- `window_send_to_workspace`
-- `action_verify_window_state`
-
-### Apps And Input
-
-- `app_list`
-- `app_launch`
-- `app_launch_and_wait`
-- `type_text`
-- `window_focus_and_type`
-- `key_press`
-- `mouse_get_position`
-- `mouse_verify_in_view`
-- `mouse_move`
-- `mouse_click`
-- `mouse_drag`
-- `mouse_scroll`
-
-### Targeting And Verification
-
-- `grid_show`
-- `grid_cell_to_point`
-- `grid_cell_rect`
-- `grid_move`
-- `grid_click`
-- `grid_hide`
-- `resolve_text_point`
-- `mouse_move_to_text`
-- `click_text`
-- `ui_find`
-- `ui_tree`
-- `find_text_on_screen`
-- `wait_for_text`
-- `wait_for_stable`
-- `click_wait_retry`
-- `action_step`
-
-## Overlay HUD
-
-The optional overlay HUD renders a small always-on-top status panel while
-Saarthi is acting. The MCP server writes a best-effort status feed to
-`~/.local/state/saarthi/status.json`; the overlay process watches that feed and
-stays hidden when no task is active.
+## Usage
 
 ```bash
-pnpm overlay          # live HUD
-pnpm overlay:demo     # standalone demo HUD
-pnpm overlay:install  # install/start the user service
+export SAARTHI_SESSION_ID="agent-$(date +%s)"
+
+saarthi window --help
+saarthi window list
+saarthi window list --json | jq '.windows[] | {id, class, title}'
+saarthi workspace focus 3 --json
+saarthi screenshot capture --target full --json
 ```
 
-The overlay is the only persistent user service:
+Human-readable text is the default. `--json` emits the handler's structured payload to stdout. Errors go to stderr and operational failures use stable non-zero exit codes.
+
+Screenshots are written to disk and return a path. An agent must read/view that path after capture; capture success is not visual inspection.
+
+Natural primary arguments can be positional for common commands:
 
 ```bash
-/home/snehit/projects/saarthi/scripts/install-overlay-service.sh
+saarthi window focus 0xABC
+saarthi grid click 14
+saarthi workspace focus 3
+```
+
+All options remain discoverable through command help:
+
+```bash
+saarthi browser open-url --help
+```
+
+## Persistent State
+
+Cross-invocation state lives under `~/.local/state/saarthi/`:
+
+- `grid-session.json`: active grid targeting session
+- `launch-timestamps.json`: policy rate-limit window
+- `overlay-task.json`: explicit overlay task lifecycle
+- `status.json`: atomic HUD status snapshot
+- `audit.jsonl`: append-only audit events
+
+Set `SAARTHI_SESSION_ID` once per agent run to group audit and trace events. Without it, each invocation gets its own generated id.
+
+## Overlay
+
+The eyes overlay is independent of the CLI and remains the only Saarthi user service:
+
+```bash
+scripts/install-overlay-service.sh
 systemctl --user restart saarthi-overlay.service
 systemctl --user status saarthi-overlay.service --no-pager
 journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ```
 
-If an old MCP systemd service exists, remove it:
+Do not create a Saarthi MCP service. The CLI emits start/done status for every command and persists explicit task lifecycle commands:
 
 ```bash
-systemctl --user disable --now saarthi-mcp.service || true
-rm -f ~/.config/systemd/user/saarthi-mcp.service
-systemctl --user daemon-reload
+saarthi overlay task-start --label "desktop task"
+saarthi overlay task-ping --state waiting
+saarthi overlay task-complete --status done
 ```
 
-See `overlay/README.md` for the status contract and host requirements.
+## Safety
 
-## Safety Model
+- Window ids are validated against live Hyprland state before mutating commands.
+- App launches always pass `config/policy.json` aliases, deny rules, and the persisted rate limiter.
+- Mutating commands append audit events and preserve act-then-verify workflows.
+- Process execution uses `execFile` with argument arrays, never interpolated shell strings.
+- `SAARTHI_DRY_RUN=1` exercises mutating command paths without desktop mutations.
 
-- Uses the current local desktop session only.
-- Auto-discovers the active Hyprland socket under `/run/user/$UID/hypr`.
-- Validates window ids before mutating window operations.
-- Enforces app launch aliases, denies, rate limits, and workspace bounds through `config/policy.json`.
-- Appends mutating-call audits to `~/.local/state/saarthi/audit.jsonl`.
-- Writes repo-local action traces to `logs/actions/run.jsonl`.
-- Supports dry-run mode:
+Hyprland 0.55+ mutations use Lua dispatcher expressions centralized in `src/lib/hyprland.ts`. A stdout line beginning with `error:` is treated as failure even if `hyprctl` exits zero.
 
-```bash
-USE_MCP_DRY_RUN=1 pnpm dev
-```
-
-## Validation
+## Development
 
 ```bash
 pnpm test
-npx tsc -p tsconfig.json
+pnpm build
 pnpm smoke
-pnpm smoke:screenshot
 ```
 
-`pnpm smoke:screenshot` includes screenshot capture and grid/in-view validation.
+The verification layers are:
 
-## Example Workflows
+- adapter tests for domain behavior
+- CLI unit/dispatch tests for argv, schemas, outputs, exit codes, state, and status
+- registry snapshot coverage for all 62 commands
+- built-binary smoke for generated help and every read-only `--json` command
 
-Capture a known window:
+`pnpm smoke:screenshot` is the optional live screenshot check and writes a real PNG.
 
-1. Find the window with `window_find`, using `classContains` or `titleContains`.
-2. Read `windows[0].id` from the result.
-3. Call `desktop_screenshot` with `target: "window"` and that `windowId`.
-
-Launch an app into an empty workspace:
-
-1. Pick a workspace with `workspace_pick_empty`.
-2. Launch through `app_launch` or `app_launch_and_wait`.
-3. Verify state with `window_wait_for`, `desktop_screenshot_save`, or `wait_for_stable`.
-
-Use grid targeting:
-
-1. Run `grid_show` on the screen or window.
-2. Use `grid_cell_rect` for a precise capture area, or `grid_cell_to_point` for a click target.
-3. Act with `grid_click` or mouse tools.
-4. Verify with screenshot comparison, OCR, or accessibility-tree checks.
-
-## More
-
-- Tool reference: `docs/TOOLS.md`
-- Architecture: `docs/ARCHITECTURE.md`
-- Operations: `docs/OPERATIONS.md`
-- Roadmap: `docs/ROADMAP.md`
-- Computer-use skill playbook: `skill/SKILL.md`
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), and [skill/SKILL.md](skill/SKILL.md).
