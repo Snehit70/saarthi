@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HyprlandError } from "./hyprland.js";
+import { HyprlandError, hyprlandEnvironment } from "./hyprland.js";
 import { commandExists } from "./util.js";
 
 const execFileAsync = promisify(execFile);
@@ -30,6 +30,7 @@ export interface AtspiResult {
   elements: UiElement[];
   count: number;
   truncated: boolean;
+  visited?: number;
 }
 
 export interface AtspiQuery {
@@ -43,6 +44,7 @@ export interface AtspiQuery {
   includeOffscreen?: boolean;
   maxDepth: number;
   maxNodes: number;
+  maxVisited?: number;
 }
 
 function resolveScript(): string {
@@ -72,10 +74,12 @@ export async function queryAtspi(q: AtspiQuery): Promise<AtspiResult> {
   if (q.interactive) args.push("--interactive");
   if (q.includeOffscreen) args.push("--include-offscreen");
   args.push("--max-depth", String(q.maxDepth), "--max-nodes", String(q.maxNodes));
+  if (q.maxVisited !== undefined) args.push("--max-visited", String(q.maxVisited));
 
   let stdout: string;
   try {
-    const res = await execFileAsync("python3", args, { timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
+    const env = q.focused ? await hyprlandEnvironment() : process.env;
+    const res = await execFileAsync("python3", args, { env, timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
     stdout = String(res.stdout);
   } catch (error) {
     const e = error as { stdout?: unknown; stderr?: unknown; killed?: boolean };

@@ -1,8 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { access, constants, readFile, stat } from "node:fs/promises";
+import { delimiter, join } from "node:path";
 
 export const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -17,12 +14,18 @@ export function isNumericWorkspaceName(name: string): boolean {
 }
 
 export async function commandExists(cmd: string): Promise<boolean> {
-  try {
-    await execFileAsync("which", [cmd]);
-    return true;
-  } catch {
-    return false;
+  const candidates = cmd.includes("/")
+    ? [cmd]
+    : (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir || ".", cmd));
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      if ((await stat(candidate)).isFile()) return true;
+    } catch {
+      /* Try the next PATH entry. Do not cache changing installations. */
+    }
   }
+  return false;
 }
 
 export async function readJsonl(path: string): Promise<Array<Record<string, unknown>>> {

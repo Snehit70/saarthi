@@ -28,18 +28,23 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "app_list",
   },
   {
+    "command": "browser action",
+    "schemaSha256": "df2f605bf40d27910d6765d9d3100782b452df9f8257595b67f0d6b6376dd26b",
+    "tool": "browser_action",
+  },
+  {
     "command": "browser discover",
     "schemaSha256": "8fa76877ae1f65e2ca7eb1e57adb5e1e6134ff96b260684ff61f6f54fd795254",
     "tool": "browser_discover",
   },
   {
     "command": "browser focus",
-    "schemaSha256": "ee80e17f461cf1fccf55f935b34b4a0e9bf2fc4ed2f98fcd215b886675469e6c",
+    "schemaSha256": "6c0c19bd0e6ee6b6acd1d8d07f9d944e063615332f1e232b000546b6912fbe0a",
     "tool": "browser_focus",
   },
   {
     "command": "browser open-url",
-    "schemaSha256": "49656314d18f2477c8e0a43835efd9d1176e5db80e782e4acb00cf1c556c2941",
+    "schemaSha256": "9f4f28f7a302c7a7ee7d7b96b59e114a8d00b1e17a592ad7f52b84c628950d94",
     "tool": "browser_open_url",
   },
   {
@@ -49,7 +54,7 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "browser vimium-hint",
-    "schemaSha256": "1024ddf24103605c6e286bef06548cb62643013bddda239a742646791d58b0e0",
+    "schemaSha256": "6810409471f3d7eefb9a1b1cd744b3dab42dc60712c260e97b12e966843664cd",
     "tool": "browser_vimium_hint",
   },
   {
@@ -119,7 +124,7 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "input key-press",
-    "schemaSha256": "3ed3c46245c85ca44bd048925b8c011e372f94a63bb88983cc3e55196cbd7f46",
+    "schemaSha256": "a589b1353b6b177a90275932c3623ed433814f573ff35d1cc349a85e4de7a3e9",
     "tool": "key_press",
   },
   {
@@ -214,17 +219,17 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "input type",
-    "schemaSha256": "9bf76368e7db410bcf84ff211d292c5bc3bc6a2fcfc963b4c57e0e5b4973ead8",
+    "schemaSha256": "bee9fbf5bf39ab2ae8a665d95777af21d20685e9694c2042a01cb3e37d13fb3d",
     "tool": "type_text",
   },
   {
     "command": "ui find",
-    "schemaSha256": "c2e390be1d2a8a6aec3d7df1a08b3c1ca9a5b5cdefd1f0065987bdc27eca15e0",
+    "schemaSha256": "7a5f776eb773b05fc64e94a137e0fde70c44c986b9665afaba639c43aa6debe5",
     "tool": "ui_find",
   },
   {
     "command": "ui tree",
-    "schemaSha256": "14c6a82df43d22c2ae98834d017ee1bb21344ef3e34ba5034c81b5119262912a",
+    "schemaSha256": "725d130e348e4210c2d7fd23952f84a699ccab661a622db0aa7566f7d9ca47df",
     "tool": "ui_tree",
   },
   {

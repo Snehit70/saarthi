@@ -1,8 +1,8 @@
 # Saarthi
 
-Saarthi is a local Hyprland desktop-automation CLI. It exposes 62 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
+Saarthi is a local Hyprland desktop-automation CLI. It exposes 63 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
 
-It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate the local Zen browser, and verify UI state. It intentionally does not expose arbitrary shell execution, clipboard access, remote transport, or an MCP server.
+It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate local Firefox-family and Chromium-family browsers, and verify UI state. It intentionally does not expose arbitrary shell execution, clipboard access, remote transport, or an MCP server.
 
 ## Install
 
@@ -55,6 +55,26 @@ All options remain discoverable through command help:
 ```bash
 saarthi browser open-url --help
 ```
+
+## Browser control
+
+`browser discover` inventories Zen, Firefox, LibreWolf, Floorp, Helium, Chromium, Chrome, Brave, Vivaldi, and Edge. It reports installed launchers separately from running windows and launch-policy availability. Native and listed Flatpak installs are supported; Helium also recognizes `~/AppImages/helium.appimage`.
+
+```bash
+saarthi browser discover --json
+saarthi browser focus --browser helium --json
+saarthi browser open-url https://example.com --browser firefox --json
+saarthi browser action --window-id 0xABC --action next-tab --json
+saarthi browser action --window-id 0xABC --action find --query "Sign in" --json
+```
+
+Automatic selection uses the focused browser, then a single running browser identity. With several unfocused browsers or matching windows, provide `--browser`, `--window-id`, or a unique `--title-contains`. With no running browser, URL opening uses discovered desktop defaults or an installed policy-approved browser. Explicit missing targets fail instead of opening an unrelated window.
+
+New-tab navigation preserves the current page. Current-tab navigation requires `--current-tab-reason`. Launches pass the shared alias, command, and rate-limit policy; reusing an existing window does not consume a launch slot. Browser alias defaults now include the ten listed browsers; remove unwanted aliases from `config/policy.json` to disable their launches.
+
+Title readiness is a heuristic, not proof that a page has loaded. A readiness timeout exits `17`; navigation may already have occurred, so inspect before retrying. Use accessibility, phrase OCR, or a fresh screenshot to verify the next page action. `browser action` and Vimium return `verificationRequired` because sending a shortcut does not establish the resulting page state.
+
+All input is foreground input. `input type` and `input key-press` accept `--window-id` to reject focus drift. Typing uses stdin rather than process arguments and limits estimated duration to 120 seconds. For concurrent or background tab control, see the limitations in the [review](docs/research/2026-10-22-generalization-review.md).
 
 ## Persistent State
 
@@ -109,7 +129,7 @@ The verification layers are:
 
 - adapter tests for domain behavior
 - CLI unit/dispatch tests for argv, schemas, outputs, exit codes, state, and status
-- registry snapshot coverage for all 62 commands
+- registry snapshot coverage for all 63 commands
 - built-binary smoke for generated help and every read-only `--json` command
 
 `pnpm smoke:screenshot` is the optional live screenshot check and writes a real PNG.

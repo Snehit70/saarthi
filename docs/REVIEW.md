@@ -1,5 +1,7 @@
 # Deep Review Report
 
+Current CLI review: [browser and desktop reliability](research/2026-10-22-generalization-review.md), including source-backed decisions, implemented changes, live verification, and prioritized remaining work.
+
 > Historical report for the removed frontend. Current review and verification contracts are documented in `docs/ARCHITECTURE.md`.
 
 Date: 2026-05-25

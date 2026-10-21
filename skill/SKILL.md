@@ -166,27 +166,29 @@ Rules:
 - Branch on the returned command `exitCode`; output text is not proof of success.
 - Do not create or kill tmux sessions, windows, or panes.
 
-## Zen Browser
+## Browsers
 
-Start with live discovery:
+Discover the actual session before choosing a browser:
 
 ```bash
 saarthi browser discover --json
-saarthi browser focus --title-contains Zen --json
-saarthi browser open-url --url https://example.com --readiness title-change --json
+saarthi browser focus --browser helium --json
+saarthi browser open-url https://example.com --browser firefox --json
+saarthi browser action --window-id 0xABC --action next-tab --json
+saarthi browser action --window-id 0xABC --action find --query "Sign in" --json
 ```
 
-Use the existing local Zen profile so authentication, containers, and extensions remain intact. Do not attach a second automation engine, modify browser settings, inspect stored credentials, or create a clean profile for user-facing work.
+Supported identities are Zen, Firefox, LibreWolf, Floorp, Helium, Chromium, Chrome, Brave, Vivaldi, and Edge. Automatic selection prefers the focused browser, then a single running identity. Specify a browser or exact window when matches are ambiguous. A running browser can be reused even if its launcher is unavailable. Actual launches still require policy approval and a launch slot.
 
-For page targeting, prefer `saarthi browser vimium-hint`; use `saarthi ui find` if accessibility is available, then OCR/grid. Browser chrome should use browser commands, shortcuts, or verified grid coordinates rather than Vimium.
+Use existing browser profiles. Do not change preferences, inspect credentials, or create clean profiles for user-facing work. Zen workspace stepping remains Zen-only and uses configured shortcuts.
 
-Current machine facts that must still be rediscovered when relevant:
+Use accessibility when available, then OCR/grid. Phrase OCR supports labels such as "Sign in" on the same line. Check the actual screenshot before choosing a query. Empty AT-SPI page results are a routing signal, not evidence that the page has no controls.
 
-- Zen is the Flatpak app `app.zen_browser.zen`.
-- Vertical tabs are on the right and the URL bar floats.
-- Page AT-SPI has historically been unavailable; verify before relying on it.
+For a configured Vimium extension, `browser vimium-hint --visible-text` sends an observed hint label. `--no-commit` opens hints without typing. The command never appends Enter, because some Vimium modes activate as soon as a label matches. Confirm gated action kinds before sending hint text, then verify the resulting state. If a filtering mode needs Enter, inspect first and send it as a separate explicitly targeted keypress.
 
-Do not act on page content when `browser open-url` returns `readiness.ready:false`. Wait for a strong page anchor or inspect a fresh screenshot first.
+Title readiness is only a heuristic. URL opening exits `17` on readiness timeout even when navigation may already have occurred. Inspect before retrying to avoid duplicate tabs or repeated actions. `browser action` and Vimium return `verificationRequired`; verify with page accessibility, OCR, or a fresh screenshot.
+
+Input is global foreground input, including across different workspaces. Set `--window-id` on `input type` and `input key-press` to reject focus drift. Focus checks reduce accidental input but do not provide background isolation or an atomic transaction with the compositor.
 
 ## Hyprland Adapter Safety
 

@@ -10,7 +10,7 @@ vi.mock("../src/lib/hyprland.js", async () => {
 
 const EXPECTED_TOOLS = [
   "action_step", "action_verify_window_state", "app_launch", "app_launch_and_wait", "app_list",
-  "browser_discover", "browser_focus", "browser_open_url", "browser_space_step", "browser_vimium_hint",
+  "browser_action", "browser_discover", "browser_focus", "browser_open_url", "browser_space_step", "browser_vimium_hint",
   "click_text", "click_wait_retry", "desktop_health", "desktop_screenshot", "desktop_screenshot_area",
   "desktop_screenshot_save", "find_text_on_screen", "grid_cell_rect", "grid_cell_to_point", "grid_click",
   "grid_hide", "grid_move", "grid_show", "key_press", "metrics_report", "mouse_click", "mouse_drag",

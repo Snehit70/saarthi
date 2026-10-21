@@ -1,3 +1,4 @@
+import { BROWSERS } from "./browser-catalog.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { HyprlandError } from "./hyprland.js";
@@ -15,12 +16,14 @@ export interface AppCatalogEntry {
 }
 
 export const APP_CATALOG: AppCatalogEntry[] = [
-  { name: "zen", description: "Privacy-focused web browser for tabs, web apps, and research.", commands: ["zen-browser", "flatpak run app.zen_browser.zen", "zen"] },
+  ...BROWSERS.map((browser) => ({
+    name: browser.id,
+    description: `${browser.id} web browser (${browser.family}).`,
+    commands: browser.commands,
+  })),
   { name: "zathura", description: "Keyboard-first PDF/document viewer.", commands: ["zathura"] },
   { name: "kitty", description: "GPU-accelerated terminal emulator.", commands: ["kitty"] },
   { name: "code", description: "Visual Studio Code editor and IDE.", commands: ["code"] },
-  { name: "firefox", description: "General-purpose web browser.", commands: ["firefox"] },
-  { name: "chromium", description: "Chromium browser for web testing.", commands: ["chromium", "google-chrome-stable", "google-chrome"] },
   { name: "nautilus", description: "File manager for browsing and opening files.", commands: ["nautilus"] },
 ];
 
@@ -29,7 +32,7 @@ export async function isLaunchCommandAvailable(command: string, launch: LaunchPo
   if (!(await commandExists(parsed.executable))) return false;
   if (parsed.executable === "flatpak" && parsed.args[0] === "run" && parsed.args[1]) {
     try {
-      await execFileAsync("flatpak", ["info", parsed.args[1]]);
+      await execFileAsync("flatpak", ["info", parsed.args[1]], { timeout: 3000 });
       return true;
     } catch {
       return false;
@@ -74,16 +77,17 @@ export function createPersistentLaunchRateLimiter(
   path = statePath("launch-timestamps.json"),
   nowMs: () => number = Date.now,
 ): () => void {
-  return () => withStateLockSync(path, () => {
-    const now = nowMs();
-    const windowStart = now - 60_000;
-    const timestamps = (readStateSync<unknown[]>(path) ?? [])
-      .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= windowStart)
-      .sort((a, b) => a - b);
-    if (timestamps.length >= maxLaunchesPerMinute) {
-      throw new HyprlandError("APP_LAUNCH_FAILED", `Launch rate limit exceeded (${maxLaunchesPerMinute}/min)`);
-    }
-    timestamps.push(now);
-    writeStateAtomicSync(path, timestamps);
-  });
+  return () =>
+    withStateLockSync(path, () => {
+      const now = nowMs();
+      const windowStart = now - 60_000;
+      const timestamps = (readStateSync<unknown[]>(path) ?? [])
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= windowStart)
+        .sort((a, b) => a - b);
+      if (timestamps.length >= maxLaunchesPerMinute) {
+        throw new HyprlandError("APP_LAUNCH_FAILED", `Launch rate limit exceeded (${maxLaunchesPerMinute}/min)`);
+      }
+      timestamps.push(now);
+      writeStateAtomicSync(path, timestamps);
+    });
 }

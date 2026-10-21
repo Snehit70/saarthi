@@ -221,141 +221,67 @@ Polls for a matching window until timeout.
 - `window`
 - `attempts`
 
+## Browser targeting
+
+`browser_focus`, `browser_open_url`, `browser_action`, and `browser_vimium_hint` share:
+
+- `browser?: "auto" | "zen" | "firefox" | "librewolf" | "floorp" | "helium" | "chromium" | "chrome" | "brave" | "vivaldi" | "edge"`, default `auto`
+- `windowId?: string`, an exact live Hyprland address
+- `titleContains?: string`, a case-insensitive title filter
+
+Automatic selection uses the focused browser, then a single running identity. Multiple unfocused identities or multiple matching unfocused windows require an explicit selector. Browser classes match catalog identities rather than page titles; Electron apps and Chromium PWA classes are excluded.
+
 ## `browser_discover`
 
-### Inputs
+Read-only inventory with no inputs. `discovery.primary` is a browser alias or null. `discovery.browsers[]` reports `id`, `family`, `installed`, `policyAllowed`, `launchCommand`, and `runningWindows`. Top-level `runningWindows` includes all supported browsers. Default desktop handlers and existing Zen/Firefox profile details are retained.
 
-None.
-
-### Behavior
-
-Discovers the local browser state Saarthi currently supports:
-
-- Zen Flatpak availability (`app.zen_browser.zen`)
-- Firefox native availability
-- default desktop browser handlers
-- Zen and Firefox profile names/paths from `profiles.ini`
-- Zen device facts from the default profile:
-  - single/default profile path
-  - right-side vertical tabs and floating URL bar prefs
-  - active/continue-where-left-off workspace prefs
-  - public Firefox containers
-  - visible active/disabled extensions plus known extension flags for Vimium, uBlock Origin, Dark Reader, SponsorBlock, Unhook, Consent-O-Matic, Tampermonkey, Control Panel for Twitter, and Sink It for Reddit
-  - configured Zen shortcuts for workspace forward/backward, pin-tab toggle, copy URL, and compact-mode toggle
-- currently running Zen windows
-
-This is a read-only inventory tool; it does not create profiles, change preferences, install extensions, or launch a browser.
+Native and listed Flatpak launchers are detected. Helium also checks `~/AppImages/helium.appimage`. Installed and running are separate facts, so an AppImage or otherwise unresolvable running browser remains reusable. It does not create profiles, change preferences, inspect stored credentials, install extensions, or launch a browser.
 
 ## `browser_focus`
 
-### Inputs
-
-- `titleContains?: string`
-- `includeHidden?: boolean` (default `false`)
-
-### Behavior
-
-Finds the best existing Zen window (`zen` / `app.zen_browser.zen`) and focuses it.
-If `titleContains` is provided, only matching Zen window titles are considered.
+Shared targeting fields plus `includeHidden?: boolean`, default false. Returns `focused`, `browser`, `window`, and `candidates`. Hidden/unmapped windows cannot be mutated even when included in candidate discovery. Focus is checked after dispatch.
 
 ## `browser_open_url`
 
-### Inputs
+Shared targeting fields plus:
 
-- `url: string`
-- `mode?: "new-tab" | "new-window" | "current-tab"` (default `"new-tab"`)
-- `reuseExisting?: boolean` (deprecated compatibility flag)
-- `titleContains?: string`
-- `currentTabReason?: "blank-page-verified" | "user-said-here"` (required for `mode="current-tab"`)
-- `timeoutMs?: number` (default `45000`)
-- `pollMs?: number` (default `200`)
-- `typeDelayMs?: number` (default `0`)
-- `readiness?: "none" | "title-change" | "title-contains"` (default `title-change` for `http(s)`, `none` for `about:`)
-- `readyTitleContains?: string` (required when `readiness="title-contains"`)
-- `readyTimeoutMs?: number` (default `12000`)
-- `readyPollMs?: number` (default `250`)
+- `url: string`, also accepted positionally
+- `mode?: "new-tab" | "new-window" | "current-tab"`, default `new-tab`
+- `reuseExisting?: boolean`, compatibility fallback when mode is omitted
+- `currentTabReason?: "blank-page-verified" | "user-said-here"`, required for current-tab
+- `timeoutMs?: number`, default 45000, and `pollMs?: number`, default 200
+- `typeDelayMs?: number`, default 0
+- `readiness?: "none" | "title-change" | "title-contains"`, default title-change for HTTP(S), none for about URLs
+- `readyTitleContains?: string`, required for title-contains
+- `readyTimeoutMs?: number`, default 12000, and `readyPollMs?: number`, default 250
 
-### Behavior
+Allowed URLs are HTTP(S), `about:home`, and `about:blank`. Credentials, local files, custom schemes, relative URLs, whitespace, and controls are rejected. `about:home` requires a Firefox-family target; use `about:blank` for portable blank-page navigation.
 
-Opens an allowed URL in the local Zen Flatpak browser.
+New-tab/current-tab navigation reuses the selected browser through Ctrl+T/Ctrl+L, stdin typing, and Enter. Missing explicit window/title targets and missing current-tab targets fail. An untargeted new-tab request can fall back to a new window. New-window mode rejects `windowId`. When no browser is running, automatic selection uses discovered defaults or a policy-approved installed browser.
 
-- Allowed URLs: `http:`, `https:`, `about:home`, `about:blank`
-- Rejected URLs: `file:`, `mailto:`, custom schemes, relative URLs, URLs with credentials
-- `mode="new-tab"`: focuses a matching existing Zen window, presses `Ctrl+T`, `Ctrl+L`, types the URL, and presses `Enter`
-- `mode="current-tab"`: requires `currentTabReason` and uses `Ctrl+L`, typed URL, `Enter`
-- `mode="new-window"`: launches Zen with `--new-window`
-- when no Zen window exists, `new-tab` and `current-tab` fall back to `--new-window`
-- after pressing Enter, the tool waits for lightweight readiness:
-  - `title-change` returns when the Zen title changes away from a blank/new-tab-like title
-  - `title-contains` returns when the title contains `readyTitleContains`
-  - `none` skips readiness waiting
+Only actual launches require an allowed alias, validated launch command, installed executable, and a shared rate-limit slot. Dry-run does not consume a slot. Existing windows can be reused without a launcher. Launch URLs remain a separate process argument, including query metacharacters.
 
-The launch is Zen-first and uses structured process arguments rather than raw shell interpolation. The tool still requires the `zen` launch alias to be allowed by policy, validates Zen availability through the launch policy, and enforces the shared launch rate limit.
-The default is intentionally new-tab so pinned tabs and the current page are not clobbered by routine navigation.
-Readiness timeout is reported as `readiness.ready=false`; it is not treated as a failed URL entry. Callers should verify with OCR/grid/wait tools before acting on page content.
+The output includes `opened`, `dryRun`, `browser`, `url`, `mode`, `effectiveMode`, `window`, `attempts`, `wasNewWindow`, and `readiness`. Readiness never substitutes a different or stale window. Zero timeout performs one observation. A readiness timeout exits 17 with `ACTION_TIMEOUT`; navigation may already have occurred. Title readiness is a heuristic and does not establish page load or an action's success.
 
-### Structured output
+## `browser_action`
 
-- `opened`
-- `browser`
-- `url`
-- `mode`
-- `effectiveMode`
-- `window`
-- `attempts`
-- `wasNewWindow`
-- `readiness`
+Shared targeting fields plus:
+
+- `action: "back" | "forward" | "reload" | "stop" | "next-tab" | "previous-tab" | "select-tab" | "find"`
+- `tabIndex?: number`, required only for select-tab, 1 through 9; 9 selects the last tab
+- `query?: string`, required only for find, a single line
+
+Sends the browser's shared keyboard shortcut with focus checks before each input stage. Returns `sent`, `dryRun`, `browser`, `action`, `window`, and `verificationRequired`. Follow with a page observation before continuing.
 
 ## `browser_vimium_hint`
 
-### Inputs
+Shared targeting fields plus `visibleText`, `commit`, `actionKind`, `confirmed`, `focusSettleMs`, `hintSettleMs`, and `typeDelayMs`. Defaults remain commit=true, actionKind=navigate, confirmed=false, settles=120 ms, typeDelayMs=0.
 
-- `visibleText: string`
-- `windowId?: string`
-- `titleContains?: string`
-- `commit?: boolean` (default `true`)
-- `actionKind?: "read" | "navigate" | "type-field" | "send" | "commit-submit" | "destructive" | "payment"` (default `"navigate"`)
-- `confirmed?: boolean` (default `false`)
-- `focusSettleMs?: number` (default `120`)
-- `hintSettleMs?: number` (default `120`)
-- `typeDelayMs?: number` (default `0`)
-
-### Behavior
-
-Focuses a Zen window and drives Vimium in-page hints: press `f`, type visible text to filter hints, then press `Enter` when `commit=true`.
-If `actionKind` is `send`, `commit-submit`, `destructive`, or `payment`, committing requires `confirmed=true`.
-Use this for page content, not browser chrome. Use URL bar and Zen shortcuts for chrome.
-
-### Structured output
-
-- `hinted`
-- `committed`
-- `window`
-- `actionKind`
+For an already configured Vimium extension, opens hints and sends an observed label or a filter supported by that extension's settings. `commit=false` opens hints without typing. No Enter is appended because hints may auto-activate as text is entered. Gated send/submit/destructive/payment action kinds require confirmation before sending hint text. Returns `hinted`, `hintTextSent`, `dryRun`, `window`, `actionKind`, and `verificationRequired`. This replaces the old, unverified `committed` field. If a filtering mode requires Enter, observe first and send it as a separate targeted keypress.
 
 ## `browser_space_step`
 
-### Inputs
-
-- `direction: "forward" | "backward"`
-- `count?: number` (default `1`)
-- `windowId?: string`
-- `titleContains?: string`
-- `settleMs?: number` (default `120`)
-
-### Behavior
-
-Focuses a Zen window and steps Zen spaces using the configured workspace forward/backward shortcut from the default profile.
-The result includes the opposite `restore` action. Callers that temporarily switch spaces must call that restore action before finishing the task.
-This tool never closes tabs, pins tabs, unpins tabs, edits Zen preferences, or changes extensions.
-
-### Structured output
-
-- `stepped`
-- `direction`
-- `count`
-- `window`
-- `restore`
+Zen-only workspace stepping. Inputs are `direction`, optional `count` default 1, optional `windowId`/`titleContains`, and optional `settleMs` default 120. Resolves configured shortcuts before focusing. Returns `stepped`, `dryRun`, `direction`, `count`, `window`, `restore`, and `verificationRequired`. Call the opposite restore action after temporary workspace switching.
 
 ## `app_launch_and_wait`
 
@@ -410,12 +336,13 @@ Verifies current window state against expected values and returns mismatch detai
 ### Inputs
 
 - `text: string`
+- `windowId?: string`, reject input if the target is no longer focused
 - `delayMs?: number` (default `0`)
 - `sensitive?: boolean` (default `false`) — masks the text in the status overlay/feed (`Typing (hidden)`); use for passwords. Audit logs and results only ever store text length.
 
 ### Behavior
 
-Types text into the currently focused input field using Wayland virtual keyboard (`wtype`).
+Types text into the currently focused input field using Wayland virtual keyboard (`wtype`). Text is sent through stdin, including text starting with a dash. Estimated typing duration must fit within 120 seconds.
 
 ## `window_focus_and_type`
 
@@ -678,6 +605,8 @@ In dry-run:
 
 ### Inputs
 
+- `windowId?: string`, reject each repeated keypress if the target is no longer focused
+
 - `key` (supported: `enter`, `tab`, `escape`, `backspace`, `delete`, arrows, `home`, `end`, `page_up`, `page_down`, `f5`, letters `a-z`, digits `0-9`)
 - `modifiers?: string[]` (`ctrl`, `alt`, `shift`, `super`)
 - `repeat?: number` (default `1`)
@@ -906,6 +835,8 @@ Sends wheel events via `ydotool`:
 
 Captures screenshot, runs Tesseract OCR (TSV), and returns matching text boxes sorted by confidence.
 
+Phrase queries match adjacent words on the same OCR line and return their combined bounding box. Distant controls, malformed geometry, and low-confidence words are excluded. Process failures and timeouts are errors; successful Tesseract stderr diagnostics are not errors.
+
 ## `click_wait_retry`
 
 ### Inputs
@@ -1043,6 +974,8 @@ Queries the accessibility tree (AT-SPI) for structured, addressable elements. Mo
 
 `cx,cy` are screen coordinates ready for `mouse_click` with `target: "full"`.
 
+`maxVisited` defaults to 10000 and bounds traversal independently of matched output. Results include `visited`; `truncated` indicates a result or visit-budget limit. On-screen queries require both visible and showing states. Focused PID lookup failure is an error, never an application-wide fallback. Defunct/stale nodes are excluded.
+
 ## `ui_tree`
 
 ### Inputs
@@ -1054,6 +987,8 @@ Queries the accessibility tree (AT-SPI) for structured, addressable elements. Mo
 ### Behavior
 
 Dumps an application's accessibility tree as a flat, depth-tagged element list for planning/inspection. Same element shape as `ui_find`.
+
+`maxVisited` defaults to 10000 and bounds traversal independently of matched output. Results include `visited`; `truncated` indicates a result or visit-budget limit. On-screen queries require both visible and showing states. Focused PID lookup failure is an error, never an application-wide fallback. Defunct/stale nodes are excluded.
 
 ## `tmux_list`
 

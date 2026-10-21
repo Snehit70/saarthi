@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { HyprlandError } from "./hyprland.js";
 import { captureScreenshot } from "./screenshot.js";
-import { parseTesseractTsv } from "./ocr.js";
+import { findTesseractMatches } from "./ocr.js";
 import type { TextMatch } from "./ocr.js";
 import { resolvePointerCoordinates } from "./pointer.js";
 import type { PointerTarget } from "./pointer.js";
@@ -25,19 +25,22 @@ export async function performFindTextOnScreen(input: {
   if (!(await commandExists("tesseract"))) {
     throw new HyprlandError("OCR_FAILED", "tesseract is not installed");
   }
-  const shot = await captureScreenshot({ target: input.target, monitorName: input.monitorName, windowId: input.windowId });
+  const shot = await captureScreenshot({
+    target: input.target,
+    monitorName: input.monitorName,
+    windowId: input.windowId,
+  });
   const tempDir = await mkdtemp(join(tmpdir(), "saarthi-ocr-"));
   const imagePath = join(tempDir, "screen.png");
   try {
     await writeFile(imagePath, shot.png);
-    const { stdout, stderr } = await execFileAsync("tesseract", [imagePath, "stdout", "--psm", "6", "tsv"]);
-    if (stderr && String(stderr).trim()) {
-      throw new HyprlandError("OCR_FAILED", String(stderr).trim());
-    }
-    const needle = input.query.toLowerCase();
-    const words = parseTesseractTsv(String(stdout))
-      .filter((w) => w.confidence >= input.confidenceMin)
-      .filter((w) => w.text.toLowerCase().includes(needle))
+    // Tesseract writes diagnostics, including resolution estimates, to stderr
+    // on successful runs. execFile's exit status determines process failure.
+    const { stdout } = await execFileAsync("tesseract", [imagePath, "stdout", "--psm", "6", "tsv"], {
+      timeout: 10000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    const words = findTesseractMatches(String(stdout), input.query, input.confidenceMin)
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, input.limit);
     return { matches: words, width: shot.width, height: shot.height, target: shot.target };
@@ -81,7 +84,13 @@ export async function resolveTextClickPoint(input: {
 
   const relativeX = match.x + Math.floor(match.width / 2) + input.offsetX;
   const relativeY = match.y + Math.floor(match.height / 2) + input.offsetY;
-  const resolved = await resolvePointerCoordinates(relativeX, relativeY, input.target, input.monitorName, input.windowId);
+  const resolved = await resolvePointerCoordinates(
+    relativeX,
+    relativeY,
+    input.target,
+    input.monitorName,
+    input.windowId,
+  );
   return {
     match,
     absoluteX: resolved.x,

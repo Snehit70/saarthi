@@ -16,6 +16,7 @@ const cp = vi.hoisted(() => {
   return { impl, execFile };
 });
 vi.mock("node:child_process", () => ({ execFile: cp.execFile }));
+vi.mock("../src/lib/util.js", () => ({ commandExists: vi.fn(async () => true) }));
 
 import { queryAtspi } from "../src/lib/atspi.js";
 
@@ -66,9 +67,7 @@ describe("queryAtspi", () => {
       e.stdout = JSON.stringify({ ok: false, error: "no focused app" });
       throw e;
     });
-    await expect(queryAtspi({ mode: "find", maxDepth: 10, maxNodes: 100 })).rejects.toThrow(
-      /no focused app/,
-    );
+    await expect(queryAtspi({ mode: "find", maxDepth: 10, maxNodes: 100 })).rejects.toThrow(/no focused app/);
   });
 
   it("maps a timeout to ATSPI_FAILED", async () => {
@@ -77,15 +76,11 @@ describe("queryAtspi", () => {
       e.killed = true;
       throw e;
     });
-    await expect(queryAtspi({ mode: "tree", maxDepth: 5, maxNodes: 50 })).rejects.toThrow(
-      /timed out/,
-    );
+    await expect(queryAtspi({ mode: "tree", maxDepth: 5, maxNodes: 50 })).rejects.toThrow(/timed out/);
   });
 
   it("rejects invalid JSON output", async () => {
     withPython(() => ({ stdout: "not json", stderr: "" }));
-    await expect(queryAtspi({ mode: "find", maxDepth: 10, maxNodes: 100 })).rejects.toThrow(
-      /invalid output/,
-    );
+    await expect(queryAtspi({ mode: "find", maxDepth: 10, maxNodes: 100 })).rejects.toThrow(/invalid output/);
   });
 });

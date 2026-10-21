@@ -21,37 +21,49 @@ export async function captureScreenshot(input: {
   target: ScreenshotTarget;
   monitorName?: string;
   windowId?: WindowId;
-}): Promise<{ png: Buffer; width: number; height: number; target: ScreenshotTarget; geometry?: string; monitorName?: string }> {
+}): Promise<{
+  png: Buffer;
+  width: number;
+  height: number;
+  target: ScreenshotTarget;
+  geometry?: string;
+  monitorName?: string;
+}> {
   const args = ["-"];
   let geometry: string | undefined;
   let originalWorkspace: string | null = null;
   let targetWorkspace: string | null = null;
   let switchedWorkspace = false;
 
-  if (input.target === "monitor") {
-    if (!input.monitorName) throw new Error("monitorName is required for monitor target");
-    args.unshift("-o", input.monitorName);
-  } else if (input.target === "active_window" || input.target === "window") {
-    let win = input.target === "active_window" ? await activeWindow() : await getWindowOrThrow(input.windowId as WindowId);
-    if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
-    originalWorkspace = await focusedWorkspaceName();
-    targetWorkspace = win.workspace;
-    if (await switchWorkspaceIfNeeded(originalWorkspace, targetWorkspace)) {
-      switchedWorkspace = true;
-      await sleep(80);
+  try {
+    if (input.target === "monitor") {
+      if (!input.monitorName) throw new Error("monitorName is required for monitor target");
+      args.unshift("-o", input.monitorName);
+    } else if (input.target === "active_window" || input.target === "window") {
+      let win =
+        input.target === "active_window" ? await activeWindow() : await getWindowOrThrow(input.windowId as WindowId);
+      if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
+      originalWorkspace = await focusedWorkspaceName();
+      targetWorkspace = win.workspace;
+      if (await switchWorkspaceIfNeeded(originalWorkspace, targetWorkspace)) {
+        switchedWorkspace = true;
+        await sleep(80);
+      }
+
+      await focusWindow(win.id);
+      await sleep(40);
+
+      // Re-read after switching/focusing so we capture the current geometry on the target workspace.
+      win = await getWindowOrThrow(win.id);
+      geometry = `${win.position.x},${win.position.y} ${win.size.width}x${win.size.height}`;
+      args.unshift("-g", geometry);
     }
 
-    await focusWindow(win.id);
-    await sleep(40);
-
-    // Re-read after switching/focusing so we capture the current geometry on the target workspace.
-    win = await getWindowOrThrow(win.id);
-    geometry = `${win.position.x},${win.position.y} ${win.size.width}x${win.size.height}`;
-    args.unshift("-g", geometry);
-  }
-
-  try {
-    const { stdout, stderr } = await execFileAsync("grim", args, { encoding: "buffer", maxBuffer: 25 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync("grim", args, {
+      encoding: "buffer",
+      timeout: 10000,
+      maxBuffer: 25 * 1024 * 1024,
+    });
     if (stderr && String(stderr).trim()) {
       throw new HyprlandError("SCREENSHOT_FAILED", String(stderr).trim());
     }

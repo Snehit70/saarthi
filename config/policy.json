@@ -1,8 +1,35 @@
 {
   "launch": {
-    "allowedAppAliases": ["zen", "firefox", "zathura", "kitty"],
-    "deniedExecutables": ["sudo", "pkexec", "doas", "su"],
-    "deniedSubstrings": ["&&", "||", ";", "|", "`", "$(", ">", "<"],
+    "allowedAppAliases": [
+      "zen",
+      "firefox",
+      "librewolf",
+      "floorp",
+      "helium",
+      "chromium",
+      "chrome",
+      "brave",
+      "vivaldi",
+      "edge",
+      "zathura",
+      "kitty"
+    ],
+    "deniedExecutables": [
+      "sudo",
+      "pkexec",
+      "doas",
+      "su"
+    ],
+    "deniedSubstrings": [
+      "&&",
+      "||",
+      ";",
+      "|",
+      "`",
+      "$(",
+      ">",
+      "<"
+    ],
     "maxCommandLength": 240,
     "maxLaunchesPerMinute": 30,
     "allowCustomCommand": true

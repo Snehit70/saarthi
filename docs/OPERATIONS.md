@@ -171,3 +171,22 @@ journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ### tmux refusal
 
 Use `saarthi tmux list --json` to resolve targets. Do not override `TMUX_PANE_BUSY` without user confirmation.
+
+## Browser and input checks
+
+```bash
+saarthi browser discover --json
+saarthi browser open-url https://example.com --browser helium --mode new-window --readiness title-contains --ready-title-contains "Example Domain" --json
+# Use the returned live window id for the following commands.
+saarthi screenshot capture --target window --window-id 0xABC --json
+saarthi browser action --window-id 0xABC --action find --query "documentation" --json
+saarthi input key-press --window-id 0xABC --key escape --json
+```
+
+Inspect the returned screenshot before choosing an OCR query. Page content can differ from its window title. A readiness timeout exits 17, and a missing target exits 11. Inspect before retrying navigation or any action that may already have happened.
+
+Use the caller's actual `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, and D-Bus session environment for input, capture, and AT-SPI. Saarthi discovers the Hyprland signature for compositor reads and passes it to focused AT-SPI lookup. It does not guess a Wayland display or start a new session. Empty page accessibility results require OCR/grid or screenshot targeting.
+
+The installed wtype may reject `-d 0`; the shared adapter omits the delay flag at zero. A harmless adapter installation check is `wtype - </dev/null` in the real Wayland session. Actual text is always sent through stdin.
+
+See [the generalization review](research/2026-10-22-generalization-review.md) for source-backed decisions, live validation, and remaining gaps.

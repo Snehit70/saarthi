@@ -54,12 +54,16 @@ function uidRuntimeDir(): string {
 async function socketCandidates(): Promise<string[]> {
   const base = uidRuntimeDir();
   const entries = await readdir(base, { withFileTypes: true });
-  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort().reverse();
+  const dirs = entries
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort()
+    .reverse();
   return dirs.map((dir) => join(base, dir, ".socket.sock"));
 }
 
-async function pickWorkingSignature(): Promise<string> {
-  const candidates = await socketCandidates();
+async function discoverWorkingSignature(): Promise<string> {
+  const candidates = await socketCandidates().catch(() => []);
   const envSig = process.env.HYPRLAND_INSTANCE_SIGNATURE;
 
   const ordered = envSig
@@ -72,8 +76,10 @@ async function pickWorkingSignature(): Promise<string> {
       const sig = sock.split("/").slice(-2, -1)[0];
       const { stdout } = await execFileAsync("hyprctl", ["-j", "version"], {
         env: { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: sig },
+        timeout: 3000,
+        maxBuffer: 4 * 1024 * 1024,
       });
-      if (stdout && sig) return sig;
+      if (sig && JSON.parse(stdout).version) return sig;
     } catch {
       continue;
     }
@@ -82,45 +88,65 @@ async function pickWorkingSignature(): Promise<string> {
   throw new HyprlandError("NO_SOCKET", "No working Hyprland socket found under /run/user/$UID/hypr");
 }
 
-async function hyprctlJson<T>(args: string[]): Promise<T> {
-  const sig = await pickWorkingSignature();
-  const { stdout, stderr } = await execFileAsync("hyprctl", ["-j", ...args], {
-    env: { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: sig },
+// Share discovery between concurrent reads within this CLI invocation. Desktop
+// state is always fetched live. Failed reads invalidate the signature for the
+// next call; mutations are never automatically replayed.
+let signaturePromise: Promise<string> | undefined;
+async function pickWorkingSignature(): Promise<string> {
+  signaturePromise ??= discoverWorkingSignature().catch((error) => {
+    signaturePromise = undefined;
+    throw error;
   });
-  if (stderr && stderr.trim()) {
-    throw new HyprlandError("NO_SOCKET", stderr.trim());
+  return signaturePromise;
+}
+
+export async function hyprlandEnvironment(): Promise<NodeJS.ProcessEnv> {
+  return { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: await pickWorkingSignature() };
+}
+
+async function hyprctlJson<T>(args: string[]): Promise<T> {
+  try {
+    const { stdout, stderr } = await execFileAsync("hyprctl", ["-j", ...args], {
+      env: await hyprlandEnvironment(),
+      timeout: 3000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    if (stderr.trim()) throw new Error(stderr.trim());
+    return JSON.parse(stdout) as T;
+  } catch (error) {
+    signaturePromise = undefined;
+    if (error instanceof HyprlandError) throw error;
+    throw new HyprlandError(
+      "NO_SOCKET",
+      `Hyprland read failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
-  return JSON.parse(stdout) as T;
+}
+
+async function dispatch(args: string[]): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync("hyprctl", ["dispatch", ...args], {
+      env: await hyprlandEnvironment(),
+      timeout: 3000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    if (stderr.trim()) throw new HyprlandError("NO_SOCKET", stderr.trim());
+    const output = stdout.trim();
+    if (output.startsWith("error:")) throw new HyprlandError("DISPATCH_FAILED", output);
+    return output;
+  } catch (error) {
+    if (error instanceof HyprlandError) throw error;
+    signaturePromise = undefined;
+    throw new HyprlandError("DISPATCH_FAILED", "Hyprland dispatch failed or timed out; inspect state before retrying");
+  }
 }
 
 export async function hyprctlDispatch(dispatcher: string, params: string): Promise<string> {
-  const sig = await pickWorkingSignature();
-  const { stdout, stderr } = await execFileAsync("hyprctl", ["dispatch", dispatcher, params], {
-    env: { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: sig },
-  });
-  if (stderr && stderr.trim()) {
-    throw new HyprlandError("NO_SOCKET", stderr.trim());
-  }
-  const output = stdout.trim();
-  if (output.startsWith("error:")) {
-    throw new HyprlandError("DISPATCH_FAILED", output);
-  }
-  return output;
+  return dispatch([dispatcher, params]);
 }
 
 async function hyprctlDispatchExpression(expression: string): Promise<string> {
-  const sig = await pickWorkingSignature();
-  const { stdout, stderr } = await execFileAsync("hyprctl", ["dispatch", expression], {
-    env: { ...process.env, HYPRLAND_INSTANCE_SIGNATURE: sig },
-  });
-  if (stderr && stderr.trim()) {
-    throw new HyprlandError("NO_SOCKET", stderr.trim());
-  }
-  const output = stdout.trim();
-  if (output.startsWith("error:")) {
-    throw new HyprlandError("DISPATCH_FAILED", output);
-  }
-  return output;
+  return dispatch([expression]);
 }
 
 function luaString(value: string): string {
@@ -147,11 +173,23 @@ export function moveWindowExpression(windowId: WindowId, mode: "absolute" | "del
   return `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = ${mode === "delta" ? "true" : "false"}, window = ${luaString(focusWindowParams(windowId))} })`;
 }
 
-export function resizeWindowParams(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): string {
-  return mode === "absolute" ? `exact ${width} ${height},${addressParam(windowId)}` : `${width} ${height},${addressParam(windowId)}`;
+export function resizeWindowParams(
+  windowId: WindowId,
+  mode: "absolute" | "delta",
+  width: number,
+  height: number,
+): string {
+  return mode === "absolute"
+    ? `exact ${width} ${height},${addressParam(windowId)}`
+    : `${width} ${height},${addressParam(windowId)}`;
 }
 
-export function resizeWindowExpression(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): string {
+export function resizeWindowExpression(
+  windowId: WindowId,
+  mode: "absolute" | "delta",
+  width: number,
+  height: number,
+): string {
   return `hl.dsp.window.resize({ x = ${width}, y = ${height}, relative = ${mode === "delta" ? "true" : "false"}, window = ${luaString(focusWindowParams(windowId))} })`;
 }
 
@@ -188,24 +226,40 @@ export function launchAppExpression(command: string): string {
 }
 
 export async function focusWindow(windowId: WindowId): Promise<string> {
+  await getWindowOrThrow(windowId);
   return hyprctlDispatchExpression(focusWindowExpression(windowId));
+}
+
+export async function assertWindowFocus(windowId: WindowId): Promise<WindowInfo> {
+  const window = await getWindowOrThrow(windowId);
+  if (!window.focused) throw new HyprlandError("INPUT_FAILED", `Window focus changed before input: ${windowId}`);
+  return window;
 }
 
 export async function switchWorkspace(workspace: string): Promise<string> {
   return hyprctlDispatchExpression(switchWorkspaceExpression(workspace));
 }
 
-export function workspaceNeedsSwitch(currentWorkspace: string | null, targetWorkspace: string | null | undefined): targetWorkspace is string {
+export function workspaceNeedsSwitch(
+  currentWorkspace: string | null,
+  targetWorkspace: string | null | undefined,
+): targetWorkspace is string {
   return Boolean(currentWorkspace && targetWorkspace && currentWorkspace !== targetWorkspace);
 }
 
-export async function switchWorkspaceIfNeeded(currentWorkspace: string | null, targetWorkspace: string | null | undefined): Promise<boolean> {
+export async function switchWorkspaceIfNeeded(
+  currentWorkspace: string | null,
+  targetWorkspace: string | null | undefined,
+): Promise<boolean> {
   if (!workspaceNeedsSwitch(currentWorkspace, targetWorkspace)) return false;
   await switchWorkspace(targetWorkspace);
   return true;
 }
 
-export async function restoreWorkspaceIfNeeded(originalWorkspace: string | null, transientWorkspace: string | null | undefined): Promise<void> {
+export async function restoreWorkspaceIfNeeded(
+  originalWorkspace: string | null,
+  transientWorkspace: string | null | undefined,
+): Promise<void> {
   if (!workspaceNeedsSwitch(originalWorkspace, transientWorkspace)) return;
   const restoreTo = originalWorkspace;
   if (!restoreTo) return;
@@ -220,22 +274,37 @@ export async function launchApp(command: string): Promise<string> {
   return hyprctlDispatchExpression(launchAppExpression(command));
 }
 
-export async function moveWindow(windowId: WindowId, mode: "absolute" | "delta", x: number, y: number): Promise<string> {
+export async function moveWindow(
+  windowId: WindowId,
+  mode: "absolute" | "delta",
+  x: number,
+  y: number,
+): Promise<string> {
+  await getWindowOrThrow(windowId);
   return hyprctlDispatchExpression(moveWindowExpression(windowId, mode, x, y));
 }
 
-export async function resizeWindow(windowId: WindowId, mode: "absolute" | "delta", width: number, height: number): Promise<string> {
+export async function resizeWindow(
+  windowId: WindowId,
+  mode: "absolute" | "delta",
+  width: number,
+  height: number,
+): Promise<string> {
+  const actionable = await getWindowOrThrow(windowId);
   if (mode === "absolute") {
-    const win = (await listWindows({ includeHidden: true })).find((w) => w.id === windowId);
+    const win = actionable;
     if (!win) {
       throw new HyprlandError("WINDOW_NOT_FOUND", `Window not found: ${windowId}`);
     }
-    return hyprctlDispatchExpression(resizeWindowExpression(windowId, "delta", width - win.size.width, height - win.size.height));
+    return hyprctlDispatchExpression(
+      resizeWindowExpression(windowId, "delta", width - win.size.width, height - win.size.height),
+    );
   }
   return hyprctlDispatchExpression(resizeWindowExpression(windowId, mode, width, height));
 }
 
 export async function sendWindowToWorkspace(windowId: WindowId, workspace: string): Promise<string> {
+  await getWindowOrThrow(windowId);
   return hyprctlDispatchExpression(sendWindowToWorkspaceExpression(windowId, workspace));
 }
 
@@ -278,12 +347,7 @@ function normalizeClient(client: HyprClient, focusedId: WindowId | null): Window
 }
 
 export async function activeWindow(): Promise<WindowInfo | null> {
-  const active = await hyprctlJson<Partial<HyprClient>>(["activewindow"]);
-  if (!active.address) return null;
-  const clients = await hyprctlJson<HyprClient[]>(["clients"]);
-  const full = clients.find((c) => c.address === active.address);
-  if (!full) return null;
-  return normalizeClient(full, active.address as WindowId);
+  return (await listWindows({ includeHidden: true })).find((window) => window.focused) ?? null;
 }
 
 export async function listWindows(filters: { workspace?: string; includeHidden?: boolean }): Promise<WindowInfo[]> {
@@ -368,11 +432,7 @@ export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
   }));
 }
 
-export function pickFirstEmptyWorkspace(
-  windows: WindowInfo[],
-  rangeStart: number,
-  rangeEnd: number,
-): string | null {
+export function pickFirstEmptyWorkspace(windows: WindowInfo[], rangeStart: number, rangeEnd: number): string | null {
   if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd)) {
     throw new HyprlandError("NUMERIC_INVALID", "Workspace range must be finite");
   }
@@ -386,7 +446,10 @@ export function pickFirstEmptyWorkspace(
   return null;
 }
 
-export async function captureGeometryForTarget(target: "active_window" | "window", windowId?: WindowId): Promise<string> {
+export async function captureGeometryForTarget(
+  target: "active_window" | "window",
+  windowId?: WindowId,
+): Promise<string> {
   const win = target === "active_window" ? await activeWindow() : await getWindowOrThrow(windowId as WindowId);
   if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
   return `${win.position.x},${win.position.y} ${win.size.width}x${win.size.height}`;

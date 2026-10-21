@@ -4,7 +4,6 @@ import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { promisify } from "node:util";
 import { HyprlandError } from "./hyprland.js";
-import { isLaunchCommandAvailable } from "./apps.js";
 import type { LaunchPolicy } from "./policy.js";
 import type { WindowInfo } from "./types.js";
 import { commandExists } from "./util.js";
@@ -18,7 +17,8 @@ import {
   ZEN_FLATPAK_ID,
   ZEN_LAUNCH_COMMAND,
 } from "./browser-types.js";
-import { zenWindows } from "./browser-zen.js";
+import { BROWSERS, browserForDesktopId, browserWindows, browserForWindow } from "./browser-catalog.js";
+import { parseLaunchCommand } from "./policy.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -132,9 +132,15 @@ function stringPref(prefs: PrefMap, key: string): string | null {
 export function parseExtensionsJson(input: string): BrowserExtensionInfo[] {
   const parsed = JSON.parse(input) as { addons?: unknown[] };
   return (parsed.addons ?? [])
-    .filter((addon): addon is Record<string, unknown> => Boolean(addon) && typeof addon === "object" && (addon as Record<string, unknown>).type === "extension")
+    .filter(
+      (addon): addon is Record<string, unknown> =>
+        Boolean(addon) && typeof addon === "object" && (addon as Record<string, unknown>).type === "extension",
+    )
     .map((addon) => {
-      const locale = addon.defaultLocale && typeof addon.defaultLocale === "object" ? (addon.defaultLocale as Record<string, unknown>) : {};
+      const locale =
+        addon.defaultLocale && typeof addon.defaultLocale === "object"
+          ? (addon.defaultLocale as Record<string, unknown>)
+          : {};
       return {
         id: typeof addon.id === "string" ? addon.id : "",
         name: typeof locale.name === "string" ? locale.name : "",
@@ -171,7 +177,8 @@ export function parseContainersJson(input: string): BrowserContainerInfo[] {
     .filter((identity): identity is Record<string, unknown> => Boolean(identity) && typeof identity === "object")
     .map((identity) => ({
       name: typeof identity.name === "string" ? identity.name : null,
-      userContextId: typeof identity.userContextId === "number" ? identity.userContextId : Number(identity.userContextId),
+      userContextId:
+        typeof identity.userContextId === "number" ? identity.userContextId : Number(identity.userContextId),
       public: identity.public === true,
     }))
     .filter((identity) => Number.isFinite(identity.userContextId));
@@ -191,7 +198,10 @@ export function parseZenShortcutsJson(input: string): ZenShortcutInfo[] {
   return (parsed.shortcuts ?? [])
     .filter((shortcut): shortcut is Record<string, unknown> => Boolean(shortcut) && typeof shortcut === "object")
     .map((shortcut) => {
-      const mods = shortcut.modifiers && typeof shortcut.modifiers === "object" ? (shortcut.modifiers as Record<string, unknown>) : {};
+      const mods =
+        shortcut.modifiers && typeof shortcut.modifiers === "object"
+          ? (shortcut.modifiers as Record<string, unknown>)
+          : {};
       return {
         id: typeof shortcut.id === "string" ? shortcut.id : null,
         action: typeof shortcut.action === "string" ? shortcut.action : null,
@@ -258,7 +268,7 @@ async function discoverZenDeviceInfo(profiles: BrowserProfileInfo[]): Promise<Ze
 
 async function commandOutput(command: string, args: string[]): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync(command, args);
+    const { stdout } = await execFileAsync(command, args, { timeout: 3000, maxBuffer: 1024 * 1024 });
     const text = stdout.trim();
     return text || null;
   } catch {
@@ -266,50 +276,92 @@ async function commandOutput(command: string, args: string[]): Promise<string | 
   }
 }
 
-export async function discoverLocalBrowsers(launch: LaunchPolicy, windows: WindowInfo[]): Promise<LocalBrowserDiscovery> {
+export async function discoverLocalBrowsers(
+  launch: LaunchPolicy,
+  windows: WindowInfo[],
+): Promise<LocalBrowserDiscovery> {
   const home = homedir();
   const zenProfilesRoot = join(home, ".var", "app", ZEN_FLATPAK_ID, ".zen");
   const firefoxProfilesRoot = join(home, ".mozilla", "firefox");
-  const [zenInstalled, firefoxInstalled, defaultBrowser, httpHandler, httpsHandler, zenProfiles, firefoxProfiles] = await Promise.all([
-    isLaunchCommandAvailable(ZEN_LAUNCH_COMMAND, launch),
-    commandExists("firefox"),
+  const [defaultBrowser, httpHandler, httpsHandler, zenProfiles, firefoxProfiles] = await Promise.all([
     commandOutput("xdg-settings", ["get", "default-web-browser"]),
     commandOutput("xdg-mime", ["query", "default", "x-scheme-handler/http"]),
     commandOutput("xdg-mime", ["query", "default", "x-scheme-handler/https"]),
     firstProfilesIni([
+      join(home, ".zen", "profiles.ini"),
+      join(home, ".config", "zen", "profiles.ini"),
       join(zenProfilesRoot, "profiles.ini"),
       join(home, ".var", "app", ZEN_FLATPAK_ID, "config", "zen", "profiles.ini"),
     ]),
     firstProfilesIni([join(firefoxProfilesRoot, "profiles.ini")]),
   ]);
   const zenDevice = await discoverZenDeviceInfo(zenProfiles);
+  const flatpaks = new Set(
+    ((await commandOutput("flatpak", ["list", "--app", "--columns=application"])) ?? "").split(/\r?\n/),
+  );
+  const browsers = await Promise.all(
+    BROWSERS.map(async (browser) => {
+      let launchCommand: string | null = null;
+      let installed = false;
+      for (const command of browser.commands) {
+        const tokens = command.split(" ");
+        const available = tokens[0] === "flatpak" ? flatpaks.has(tokens[2]) : await commandExists(command);
+        if (!available) continue;
+        installed = true;
+        try {
+          launchCommand ??= parseLaunchCommand(command, launch).normalized;
+        } catch {
+          /* Installed but blocked by policy. */
+        }
+      }
+      return {
+        id: browser.id,
+        family: browser.family,
+        installed,
+        policyAllowed: launch.allowedAppAliases.includes(browser.id) && launchCommand !== null,
+        launchCommand,
+        runningWindows: browserWindows(windows, browser.id),
+      };
+    }),
+  );
+  const runningWindows = browserWindows(windows);
+  const preferredWindow = runningWindows.find((window) => window.focused) ?? runningWindows[0];
+  const primary =
+    (preferredWindow ? browserForWindow(preferredWindow) : null) ??
+    browserForDesktopId(defaultBrowser) ??
+    browserForDesktopId(httpsHandler) ??
+    browsers.find((browser) => browser.installed && browser.policyAllowed)?.id ??
+    null;
 
   return {
-    primary: "zen-flatpak",
+    primary,
+    browsers,
     defaultBrowser,
     httpHandler,
     httpsHandler,
     zen: {
-      installed: zenInstalled,
-      policyAllowed: launch.allowedAppAliases.includes("zen"),
+      installed: browsers.find((browser) => browser.id === "zen")!.installed,
+      policyAllowed: browsers.find((browser) => browser.id === "zen")!.policyAllowed,
       appId: ZEN_FLATPAK_ID,
       launchCommand: ZEN_LAUNCH_COMMAND,
-      profilesRoot: zenProfilesRoot,
+      profilesRoot: zenProfiles[0] ? dirname(zenProfiles[0].source) : zenProfilesRoot,
       profiles: zenProfiles,
       device: zenDevice,
     },
     firefox: {
-      installed: firefoxInstalled,
+      installed: browsers.find((browser) => browser.id === "firefox")!.installed,
       profilesRoot: firefoxProfilesRoot,
       profiles: firefoxProfiles,
     },
-    runningWindows: zenWindows(windows),
+    runningWindows,
   };
 }
 
 export async function requireZenShortcut(action: keyof typeof ZEN_SHORTCUT_ACTIONS): Promise<ZenShortcutInfo> {
   const home = homedir();
   const profiles = await firstProfilesIni([
+    join(home, ".zen", "profiles.ini"),
+    join(home, ".config", "zen", "profiles.ini"),
     join(home, ".var", "app", ZEN_FLATPAK_ID, ".zen", "profiles.ini"),
     join(home, ".var", "app", ZEN_FLATPAK_ID, "config", "zen", "profiles.ini"),
   ]);
@@ -321,4 +373,3 @@ export async function requireZenShortcut(action: keyof typeof ZEN_SHORTCUT_ACTIO
   }
   return shortcut;
 }
-

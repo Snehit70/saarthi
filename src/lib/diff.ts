@@ -23,6 +23,9 @@ function clamp01(n: number): number {
 function parse(stderr: string): DiffResult {
   const norm = stderr.match(/\(([\d.eE+-]+)\)/);
   const rawMatch = stderr.match(/^\s*([\d.eE+-]+)/);
+  if (!norm || !rawMatch || !Number.isFinite(Number(norm[1])) || !Number.isFinite(Number(rawMatch[1]))) {
+    throw new HyprlandError("SCREENSHOT_FAILED", "ImageMagick returned an invalid metric");
+  }
   return {
     normalized: norm ? clamp01(Number(norm[1])) : 1,
     raw: rawMatch ? Number(rawMatch[1]) : Number.NaN,
@@ -40,9 +43,10 @@ export async function comparePngFiles(a: string, b: string, diffOut?: string): P
   const out = diffOut ?? "null:";
   const args = ["compare", "-metric", "RMSE", a, b, out];
   try {
-    const { stderr } = await execFileAsync("magick", args);
+    const { stderr } = await execFileAsync("magick", args, { timeout: 10000, maxBuffer: 1024 * 1024 });
     return parse(String(stderr)); // exit 0 (within fuzz)
   } catch (error) {
+    if (error instanceof HyprlandError) throw error;
     const stderr = String((error as { stderr?: unknown }).stderr ?? "");
     if (/\([\d.eE+-]+\)/.test(stderr)) return parse(stderr); // exit 1: differ, metric present
     if (/widths or heights differ/i.test(stderr)) return { normalized: 1, raw: Number.NaN };
