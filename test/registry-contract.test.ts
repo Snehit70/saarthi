@@ -10,6 +10,9 @@ vi.mock("../src/lib/hyprland.js", async () => {
 
 const EXPECTED_TOOLS = [
   "action_step",
+  "file_find",
+  "knowledge_lookup",
+  "knowledge_remember",
   "action_verify_window_state",
   "app_launch",
   "app_launch_and_wait",
@@ -28,6 +31,7 @@ const EXPECTED_TOOLS = [
   "plan_run",
   "screenshot_workspace",
   "browser_discover",
+  "browser_profiles",
   "browser_focus",
   "browser_open_url",
   "browser_space_step",

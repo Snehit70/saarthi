@@ -211,6 +211,32 @@ Use these failure labels when reporting evidence: `focus_drift`, `cursor_out_of_
 
 For non-trivial tasks report the target window id, baseline screenshot path, accessibility/OCR/grid anchor used, final verification screenshot path, and whether the final action was performed or only prepared. Use `saarthi observability session-trace-export --json` and `logs/actions/run.jsonl` for diagnosis.
 
+## Fast discovery and local knowledge
+
+Resolve files, profiles and prior experience with one command each before touching the UI. Do not browse folders or profile menus visually when these answer the question.
+
+```bash
+saarthi knowledge lookup --query "whatsapp attach images" --json
+saarthi file find --directory ~/Pictures/Screenshots --name-contains kavach --type image --json
+saarthi browser profiles --browser helium --json
+saarthi browser open-url https://web.whatsapp.com --browser helium --profile personal --json
+```
+
+- `file find` matches filenames case-insensitively in an explicit directory, verifies image signatures for `--type image`, never follows symlinks and returns natural order. Raise `--max-depth` only when the user's folder has subfolders. `complete: false` means the bound was hit; narrow the query instead of guessing.
+- `browser profiles` lists Chromium-family profile directories and display names. Pass the exact directory or a unique display name to `--profile`. When the user names a profile that does not resolve (for example "Profile 1" or a number), show the listed names and ask; never map numbers to positions.
+- Commands resolve the live Hyprland display, runtime directory and session bus themselves. Do not export `WAYLAND_DISPLAY` or guess `wayland-1`.
+- `knowledge lookup` returns earlier observations ranked by matching terms, with success/failure counts and expiry. Treat entries as hints to revalidate: re-observe windows, selectors and coordinates before acting. Expired entries rank last.
+- After a task succeeds or fails in an informative way, record what a future run would need. Write a mode-600 JSON file and run `knowledge remember --entry-file PATH`:
+
+```json
+{"id": "helium-whatsapp-attach", "app": "helium", "profile": "personal",
+ "title": "Attach images in WhatsApp Web", "summary": "What worked and what to avoid",
+ "anchors": ["Attach button left of the composer"], "steps": ["Open self chat", "Attach", "Photos & videos"],
+ "verification": "4 thumbnails in preview tray", "outcome": "succeeded", "elapsedMs": 9000}
+```
+
+Reuse the same `id` to refine an entry; counts accumulate. Use a new id for a different app or profile. Do not store credentials, message contents, clipboard data or personal file contents.
+
 ## Semantic actions and image history
 
 Prefer `ui act --window-id ID --name EXACT --role text --action set-text --text VALUE` for verifiable replacement, and `ui read-text` for exact readback. Do not use password fields. A selector must identify one current enabled on-screen element. `ui find/tree --window-id ID` scopes traversal and translates frame-relative positions into screen coordinates.

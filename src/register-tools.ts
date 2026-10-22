@@ -19,3 +19,9 @@ import "./handlers/perception.js";
 import "./handlers/composite.js";
 import "./handlers/clipboard.js";
 import "./handlers/ui-action.js";
+
+import "./handlers/files.js";
+
+import "./handlers/browser-profiles.js";
+
+import "./handlers/knowledge.js";

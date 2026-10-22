@@ -64,8 +64,13 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "browser open-url",
-    "schemaSha256": "9f4f28f7a302c7a7ee7d7b96b59e114a8d00b1e17a592ad7f52b84c628950d94",
+    "schemaSha256": "4c68007ac1886c479818a4b0af3e03265d97fbbf6d43f72fbc80f45a18d7d52b",
     "tool": "browser_open_url",
+  },
+  {
+    "command": "browser profiles",
+    "schemaSha256": "36f78f7b0a2897e6a83ea3b862d8afb8cfd78c69280a50f691168582e53030ba",
+    "tool": "browser_profiles",
   },
   {
     "command": "browser space-step",
@@ -153,6 +158,11 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "desktop_stop",
   },
   {
+    "command": "file find",
+    "schemaSha256": "31aac9e600b91a555d59ba2aa45091bd25b4bf2783eb696454f6e5392532d25d",
+    "tool": "file_find",
+  },
+  {
     "command": "text find",
     "schemaSha256": "38d9be45f7aa9ef0ac8d9f35b9155f3cf0e321c5870397cd78a0373406619879",
     "tool": "find_text_on_screen",
@@ -191,6 +201,16 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "command": "input key-press",
     "schemaSha256": "a589b1353b6b177a90275932c3623ed433814f573ff35d1cc349a85e4de7a3e9",
     "tool": "key_press",
+  },
+  {
+    "command": "knowledge lookup",
+    "schemaSha256": "633d44c126b73ed42cfe19cdc51b3edfd625eacabcf27585c90d041ab4432e00",
+    "tool": "knowledge_lookup",
+  },
+  {
+    "command": "knowledge remember",
+    "schemaSha256": "fb8c4af9667a996febfb2de1f4f90a8c6e5394d9d83885e1877dd234d6c2ed61",
+    "tool": "knowledge_remember",
   },
   {
     "command": "observability metrics-report",
