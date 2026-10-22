@@ -5,14 +5,14 @@
 Check that no development process is already running before starting one. The normal CLI does not need a server process.
 
 ```bash
-pnpm install
-pnpm build
-npm link
+bun install
+bun run build
+bun link
 command -v saarthi
 saarthi --help
 ```
 
-After source changes, run `pnpm build`. The npm-linked command points at `dist/src/cli.js`, so no service or client reconnect is required.
+After source changes, run `bun run build`. The linked command points at `dist/src/cli.js`, so no service or client reconnect is required.
 
 ## Overlay Service
 
@@ -55,9 +55,9 @@ Use `error` or `timeout` when appropriate. Inspect current state at `~/.local/st
 ## Verification
 
 ```bash
-pnpm test
-pnpm build
-pnpm smoke
+bun run test
+bun run build
+bun run smoke
 ```
 
 Optional live checks:
@@ -65,10 +65,10 @@ Optional live checks:
 ```bash
 saarthi observability desktop-health --json | jq .
 saarthi window list --json | jq '.windows | length'
-pnpm smoke:screenshot
+bun run smoke:screenshot
 ```
 
-`pnpm smoke:screenshot` performs a real capture. Read/view the returned path and remove the generated test image when no longer needed.
+`bun run smoke:screenshot` performs a real capture. Read/view the returned path and remove the generated test image when no longer needed.
 
 Dry-run mutations with:
 
@@ -198,3 +198,9 @@ Check `command -v cliphist wl-copy wl-paste flock python3` in the same Wayland s
 Exit 18, `INPUT_BUSY`, means another Saarthi invocation holds the desktop input lease. Let that operation finish and inspect before retrying. The lease releases on owner death. Do not remove the lockfile while another invocation runs, because replacing its inode would create a second independent lock. This is coordination between Saarthi processes and does not isolate unrelated desktop input.
 
 The benchmark fixture is an optional policy-approved desktop application. It does not require a server. See [SaarthiBench](../benchmarks/README.md) for private run setup, version freezing, scoring, and the difference between scripted tooling results and agent evaluation.
+
+## Background capture and plans
+
+See [BACKGROUND-WORK.md](BACKGROUND-WORK.md) for the private plan schema, file-input workflow and failure recovery. Build the native helper with `bun run build:native`. Its build is optional when prerequisites are missing, but scanner/compiler errors fail once prerequisites exist. CI requires it.
+
+The browser adapter requires an existing connected Open Browser Use profile. A missing or ambiguous connection fails without launching anything. Browser session leases are separate from the desktop input lease and conflicts also exit 18. Never delete a live lease file. Plan receipts in `~/.local/state/saarthi/plans/` refuse duplicate ids, including after partial failure. Inspect an error's completedSteps and inFlightStep before writing a new plan. A timeout does not establish that an action had no effect.

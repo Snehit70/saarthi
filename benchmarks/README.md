@@ -17,12 +17,18 @@
 
 All workflows run in the same GTK workspace. Variations of the same UI are correlated; 64 passes do not establish 64 independent capabilities. Fixtures use synthetic text, images, and files, with per-task seeded values. The public task brief appears in an accessible text view. The oracle checks the saved artifact, every field, body, unrelated composer, image hash order, attached paths and hashes, original source files, send count, and record history.
 
+## Hardest current cases
+
+The 40-record case requires 40 exact title/body saves in order, preservation of unrelated fields and the other composer, and zero sends. The 15-record recovery case re-inspects after an obsolete selector halfway through. The eight-article case uses roughly 2,100 characters per body; the separate long-article edit uses roughly 5,100 characters. The six-record attachment case attaches one image only to the final draft. The draft-package case exercises repeated native file dialogs and exact file hashes, title, and tags. Lengths vary slightly with seeded values.
+
+These cases stress repeated GUI state transitions, exactness, and recovery. They are not multi-hour research workloads or independent real-application planning tasks. Their scripted recipes are known to the reference controller. The 56-task real-application backlog remains a separate, unexecuted design.
+
 ## Run locally
 
 Requires the normal built CLI plus Python 3, GTK 3/AT-SPI bindings, `cliphist`, `wl-copy`, `wl-paste`, and a live Hyprland session. Use the user's existing Wayland and session bus environment. No development server is required. The checked-in launch policy enables `benchmark-fixture`; remove that alias to disable it.
 
 ```bash
-pnpm build
+bun run build
 python3 benchmarks/run.py prepare --run-dir /tmp/saarthi-bench-seed-77 --seed 77 --controller scripted-reference
 saarthi app launch-and-wait --app-name benchmark-fixture --title-contains "Saarthi benchmark workspace" --json
 # Use the returned live window id, then keep the desktop available for this run.

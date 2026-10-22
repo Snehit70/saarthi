@@ -1,6 +1,8 @@
 import type { z } from "zod";
 
 export interface ToolAnnotations {
+  /** Internal dispatch hint. False means this command never needs global input. */
+  desktopInput?: boolean;
   readOnlyHint?: boolean;
   destructiveHint?: boolean;
   idempotentHint?: boolean;

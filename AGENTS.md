@@ -10,6 +10,7 @@
   - `journalctl --user -u saarthi-overlay.service -n 100 --no-pager`
 - Do not start `saarthi-mcp.service`; disable and remove it if present.
 - Do not add daemon, HTTP, remote, or MCP transport.
+- Background browser commands may act as a per-invocation client of an already connected local Open Browser Use socket. Never install/start a bridge or claim unrelated user tabs implicitly.
 - Validate all window ids against live `hyprctl -j clients` before dispatching mutating commands.
 - Route every app launch through the launch policy (`config/policy.json`); never bypass alias/deny/rate-limit checks.
 - Clipboard access tools are allowed. Keep clipboard data out of logs and scope paste operations to an explicitly validated destination.

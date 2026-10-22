@@ -15,6 +15,12 @@ const EXPECTED_TOOLS = [
   "app_launch_and_wait",
   "app_list",
   "browser_action",
+  "browser_background_open",
+  "browser_background_tabs",
+  "browser_background_act",
+  "browser_background_finish",
+  "plan_run",
+  "screenshot_workspace",
   "browser_discover",
   "browser_focus",
   "browser_open_url",
@@ -139,5 +145,16 @@ describe("CLI registry contract", () => {
         };
       });
     expect(signature).toMatchSnapshot();
+  });
+
+  it("rejects launch-rule injection and numeric workspaces outside policy", async () => {
+    const { registry } = await import("../src/registry.js");
+    for (const verb of ["launch", "launch-and-wait"]) {
+      const schema = registry.get("app", verb)!.config.inputSchema.workspace;
+      expect(schema.safeParse("4").success).toBe(true);
+      expect(schema.safeParse("name:research").success).toBe(true);
+      for (const value of ["99", "0", "4] exec bad", "4 silent", "special:x;exec"])
+        expect(schema.safeParse(value).success).toBe(false);
+    }
   });
 });

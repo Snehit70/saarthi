@@ -1,21 +1,21 @@
 # Saarthi
 
-Saarthi is a local Hyprland desktop-automation CLI. It exposes 69 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
+Saarthi is a local Hyprland desktop-automation CLI. It exposes 75 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
 
 It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate local Firefox-family and Chromium-family browsers, and verify UI state. It intentionally does not expose arbitrary shell execution, remote transport, or an MCP server.
 
 ## Install
 
-Requirements: Node.js 22+, pnpm, Hyprland, and the external tools needed by the commands you use (`hyprctl`, `grim`, `wtype`, `ydotool`, `tesseract`, ImageMagick, tmux, `flock`, `cliphist`, `wl-clipboard`, and AT-SPI Python bindings).
+Requirements: Node.js 22+, Bun 1.3.3+, Hyprland, and the external tools needed by the commands you use (`hyprctl`, `grim`, `wtype`, `ydotool`, `tesseract`, ImageMagick, tmux, `flock`, `cliphist`, `wl-clipboard`, and AT-SPI Python bindings).
 
 ```bash
-pnpm install
-pnpm build
-npm link
+bun install
+bun run build
+bun link
 saarthi --help
 ```
 
-`package.json` installs `saarthi` from `dist/src/cli.js`. Re-run `pnpm build` after source changes; the linked command immediately uses the rebuilt file.
+`package.json` installs `saarthi` from `dist/src/cli.js`. Re-run `bun run build` after source changes; the linked command immediately uses the rebuilt file.
 
 ### Migrating from the MCP server
 
@@ -74,7 +74,7 @@ New-tab navigation preserves the current page. Current-tab navigation requires `
 
 Title readiness is a heuristic, not proof that a page has loaded. A readiness timeout exits `17`; navigation may already have occurred, so inspect before retrying. Use accessibility, phrase OCR, or a fresh screenshot to verify the next page action. `browser action` and Vimium return `verificationRequired` because sending a shortcut does not establish the resulting page state.
 
-All input is foreground input. `input type` and `input key-press` accept `--window-id` to reject focus drift. Typing uses stdin rather than process arguments and limits estimated duration to 120 seconds. For concurrent or background tab control, see the limitations in the [review](docs/research/2026-10-22-generalization-review.md).
+Keyboard and mouse input is foreground input. `input type` and `input key-press` accept `--window-id` to reject focus drift. Typing uses stdin rather than process arguments and limits estimated duration to 120 seconds. For background tab work, use the optional adapter below.
 
 ## Semantic actions and clipboard images
 
@@ -90,15 +90,44 @@ saarthi clipboard paste-images --window-id 0xABC --target-name "Target composer"
 
 `paste-images` skips text history entries, requires a uniquely named focused editable field, verifies each injected image, and sends Ctrl+V without Enter. It restores the previous preferred MIME payload, or clears the selection if it was empty. It preserves a new clipboard selection detected during the operation. Full multi-format clipboard restoration is not supported. History watchers may retain the temporary images. A successful paste command still requires checking the destination's attachment state.
 
-If the application does not expose an addressable field, use `clipboard export-images` and attach the returned private files through its native file chooser. This requires separate destination verification.
+If the application does not expose an addressable field, use `clipboard export-images` and attach the returned private files through its browser file input or native file chooser. This requires separate destination verification.
 
 `ui batch --window-id 0xABC --steps-file /private/plan.json` runs up to 20 structured semantic steps. Each target is resolved again, text writes are verified, and a failure reports how many steps completed. Inspect before retrying; completed actions are never replayed automatically. Send, submit, delete, and payment actions require confirmation flags.
 
 A kernel-held input lease serializes Saarthi mutations across processes. A conflicting invocation exits `18` before input. The lease is released when its owner dies. It does not isolate the desktop from a person typing or from other applications. AT-SPI coordinate translation now aligns the selected frame with live compositor bounds, including negative screen origins.
 
+## Background work and file selection
+
+Window screenshots use `grim -T` and a native Wayland mapping helper by default. They do not focus or switch workspaces. Build the helper with a C compiler, `pkg-config`, Wayland development headers and `wayland-scanner`; `SAARTHI_REQUIRE_NATIVE=1 bun run build` makes its prerequisites mandatory. Unsupported capture fails without a foreground fallback. `--allow-focus` explicitly opts into the older focus/crop path.
+
+```bash
+saarthi screenshot capture --target window --window-id 0xABC --json
+saarthi screenshot workspace --workspace 4 --max-windows 12 --json
+saarthi app launch-and-wait --app-name zathura --workspace 4 --class-contains zathura --json
+```
+
+Workspace capture returns a private image set and window positions. It does not reconstruct compositor wallpaper, stacking, panels or effects. A mapped window that cannot be exported causes an error; capture supported windows individually when needed. `keepCurrentWorkspace` uses Hyprland's silent launch rule. Applications that reuse an existing process/window can ignore initial placement, so verify the returned workspace.
+
+An optional adapter uses an **already connected** Open Browser Use extension/profile. Saarthi starts no browser service and never claims unrelated tabs. Discover profiles with `open-browser-use profiles --connected`, then explicitly select the browser, profile and a task-specific session on every command:
+
+```bash
+saarthi browser background-open --browser-target chrome --profile Default --session-id report-task --url https://example.com --label "Report task" --json
+saarthi browser background-tabs --browser-target chrome --profile Default --session-id report-task --json
+saarthi browser background-act --browser-target chrome --profile Default --session-id report-task --step-file /private/step.json --json
+saarthi browser background-finish --browser-target chrome --profile Default --session-id report-task --json
+```
+
+Step files must be user-owned regular files, at most 1 MiB, with private permissions such as `chmod 600`. Actions are `inspect`, `read`, `fill`, `click`, `files`, `wait-text`, and `screenshot`. Each step declares an owned `tabId` and exact `expectedUrl`. `inspect` returns bounded controls with selectors; every action resolves its selector again. Password fields and unconfirmed submissions/deletions/payments are refused. There is no caller-supplied JavaScript or shell command.
+
+A `files` step takes explicit paths, checks regular files and a 128 MiB total limit, and transfers bytes in chunks over the existing socket. It assigns the complete file list once, dispatches input/change events, and checks names/sizes. Hidden file inputs are supported. This avoids both native dialogs and extension file-URL permission changes. A verified file list is not proof of a server upload; inspect the application's attachment state. Sites requiring trusted native events, cross-origin frames, shadow DOM, permissions or native dialogs need a separate supported workflow.
+
+Prepare 4–10 steps ahead with `plan run --plan-file /private/plan.json`. The plan declares allowed session tabs and native windows, including each native window's PID and workspace. Browser changes require an immediate text checkpoint. One browser connection serves the plan, with a session-specific lease instead of the global desktop-input lease. Progress is synced before each step. A started plan id cannot be replayed, including after failure or process death. Inspect the receipt and actual application state, then prepare a new id containing only remaining work.
+
+See [the plan example and recovery instructions](docs/BACKGROUND-WORK.md). A browser tab scope does not assert which Hyprland workspace contains its window. Ordinary native keyboard/mouse actions still share your seat; a reserved workspace alone cannot isolate them.
+
 ## Computer-use benchmark
 
-[SaarthiBench](benchmarks/README.md) contains 64 native GTK workflows across clipboard, documents, data, forms, files, recovery, long sequences, and preservation. It checks saved artifacts, exact text, image order, file hashes, unrelated drafts, and accidental sends, with action and wall-time budgets. The scripted reference track measures tooling; an independent agent comparison with Codex remains to be run.
+[SaarthiBench](benchmarks/README.md) contains 64 native GTK workflows across clipboard, documents, data, forms, files, recovery, long sequences, and preservation. It checks saved artifacts, exact text, image order, file hashes, unrelated drafts, and accidental sends, with action and wall-time budgets. The scripted reference track is a synthetic integration suite, not an autonomous benchmark score. The 56 real-application challenge designs remain unrun, and an independent agent comparison with Codex remains to be run.
 
 ## Persistent State
 
@@ -144,18 +173,18 @@ Hyprland 0.55+ mutations use Lua dispatcher expressions centralized in `src/lib/
 ## Development
 
 ```bash
-pnpm test
-pnpm build
-pnpm smoke
+bun run test
+bun run build
+bun run smoke
 ```
 
 The verification layers are:
 
 - adapter tests for domain behavior
 - CLI unit/dispatch tests for argv, schemas, outputs, exit codes, state, and status
-- registry snapshot coverage for all 69 commands
+- registry snapshot coverage for all 75 commands
 - built-binary smoke for generated help and every read-only `--json` command
 
-`pnpm smoke:screenshot` is the optional live screenshot check and writes a real PNG.
+`bun run smoke:screenshot` is the optional live screenshot check and writes a real PNG.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), and [skill/SKILL.md](skill/SKILL.md).

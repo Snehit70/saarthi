@@ -14,12 +14,12 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "app launch",
-    "schemaSha256": "ca7cc0a82f2a6f6476650364524182cfec8cb6dc2f14f687a928d2b9afa2b701",
+    "schemaSha256": "0d84feee490b111cebf78ac4a8a190ee805a1db866ad6a5dc76b1bef99e78fb1",
     "tool": "app_launch",
   },
   {
     "command": "app launch-and-wait",
-    "schemaSha256": "c276fb3d7b0b8dfce48b3b6aa5fa24767b969ad9e0ffcbe39b7c8d983571b236",
+    "schemaSha256": "bdbbb1b94c4d062ea85010ccff45a12622127d6710d81add81741155ac258368",
     "tool": "app_launch_and_wait",
   },
   {
@@ -31,6 +31,26 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "command": "browser action",
     "schemaSha256": "df2f605bf40d27910d6765d9d3100782b452df9f8257595b67f0d6b6376dd26b",
     "tool": "browser_action",
+  },
+  {
+    "command": "browser background-act",
+    "schemaSha256": "b75355007afa024ec4536b6ee958b871e7e453ea42cde6a441c4c69c0d644d02",
+    "tool": "browser_background_act",
+  },
+  {
+    "command": "browser background-finish",
+    "schemaSha256": "093f4d26d8c0b49ce4c38f9fab24b73289da47f82192bbffeb198360aa4e725e",
+    "tool": "browser_background_finish",
+  },
+  {
+    "command": "browser background-open",
+    "schemaSha256": "99e1c6973147afade85caf03274b7f5367305252bdfcd01a318601f268ec5aaf",
+    "tool": "browser_background_open",
+  },
+  {
+    "command": "browser background-tabs",
+    "schemaSha256": "039eee0ef7886cf10562dbd72c649e3691f6c39b41790ecbb208f89d71457a09",
+    "tool": "browser_background_tabs",
   },
   {
     "command": "browser discover",
@@ -89,7 +109,7 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "screenshot capture",
-    "schemaSha256": "053d00c0aa49c9ac8ea959d92ca3ced293d23a58023c0e6e3caa0598ee1fe78b",
+    "schemaSha256": "3e7261a3c4b3afaab22a24ef3160b5b3b77c6738b7799bd1f30e654a889171df",
     "tool": "desktop_screenshot",
   },
   {
@@ -99,7 +119,7 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "screenshot save",
-    "schemaSha256": "85d4e993987063025a5b6ec0d4896a214a6f805c9de59b56a2efca83ddf94072",
+    "schemaSha256": "773d8ed06f742ba202088fcb0674abc1a67ea3e59adbd13a9dc6460940ccb0e6",
     "tool": "desktop_screenshot_save",
   },
   {
@@ -198,6 +218,11 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "overlay_task_start",
   },
   {
+    "command": "plan run",
+    "schemaSha256": "b83937b672c595dcb597b2823c44c1425f505e0524eb80b26f404d3ef292e6d4",
+    "tool": "plan_run",
+  },
+  {
     "command": "text resolve-point",
     "schemaSha256": "1c5861a92d2d544d743f4c34cf087811878a6b67fab94f57f14e367f36137d6d",
     "tool": "resolve_text_point",
@@ -206,6 +231,11 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "command": "observe screenshot-compare",
     "schemaSha256": "2df5796559b1bd1fa8f1ac19548e66df13ebb1441677d7001cf3805b319aa0d7",
     "tool": "screenshot_compare",
+  },
+  {
+    "command": "screenshot workspace",
+    "schemaSha256": "3068368ea8d4f01afee18941a9e05b8d7eeae37081185059d5c984e48c9fede4",
+    "tool": "screenshot_workspace",
   },
   {
     "command": "observability session-trace-export",

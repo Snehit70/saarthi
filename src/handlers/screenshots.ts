@@ -19,23 +19,43 @@ server.registerTool(
     inputSchema: {
       target: z.enum(["full", "monitor", "active_window", "window"]),
       monitorName: z.string().optional(),
-      windowId: z.string().regex(/^0x[0-9a-fA-F]+$/).optional(),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional(),
+      allowFocus: z
+        .boolean()
+        .default(false)
+        .describe("Explicit legacy fallback: may switch workspace and focus a window. Default capture never focuses."),
     },
     annotations: {
+      desktopInput: false,
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
     },
   },
-  async ({ target, monitorName, windowId }) => {
-    const shot = await captureScreenshot({ target, monitorName, windowId: windowId as WindowId | undefined });
+  async ({ target, monitorName, windowId, allowFocus }) => {
+    const shot = await captureScreenshot({
+      target,
+      monitorName,
+      windowId: windowId as WindowId | undefined,
+      allowFocus,
+    });
     await mkdir(screenshotDirDefault, { recursive: true });
     const path = join(screenshotDirDefault, `${new Date().toISOString().replace(/[:.]/g, "-")}-capture.png`);
-    await writeFile(path, shot.png);
+    await writeFile(path, shot.png, { mode: 0o600 });
     await audit(
       "desktop_screenshot",
-      { target, monitorName: monitorName ?? null, windowId: windowId ?? null, path, width: shot.width, height: shot.height },
+      {
+        target,
+        monitorName: monitorName ?? null,
+        windowId: windowId ?? null,
+        path,
+        width: shot.width,
+        height: shot.height,
+      },
       dryRun,
     );
     return {
@@ -47,6 +67,7 @@ server.registerTool(
         target: shot.target,
         geometry: shot.geometry ?? null,
         monitorName: shot.monitorName ?? null,
+        captureMethod: shot.captureMethod,
       },
     };
   },
@@ -60,36 +81,53 @@ server.registerTool(
     inputSchema: {
       target: z.enum(["full", "monitor", "active_window", "window"]),
       monitorName: z.string().optional(),
-      windowId: z.string().regex(/^0x[0-9a-fA-F]+$/).optional(),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional(),
+      allowFocus: z.boolean().default(false),
       filenamePrefix: z.string().min(1).max(64).default("screenshot"),
       outputDir: z.string().optional(),
     },
     annotations: {
+      desktopInput: false,
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false,
     },
   },
-  async ({ target, monitorName, windowId, filenamePrefix, outputDir }) => {
-    const shot = await captureScreenshot({ target, monitorName, windowId: windowId as WindowId | undefined });
+  async ({ target, monitorName, windowId, filenamePrefix, outputDir, allowFocus }) => {
+    const shot = await captureScreenshot({
+      target,
+      monitorName,
+      windowId: windowId as WindowId | undefined,
+      allowFocus,
+    });
     const dir = outputDir ?? screenshotDirDefault;
     const safePrefix = filenamePrefix.replace(/[^a-zA-Z0-9._-]/g, "_");
     const filename = `${new Date().toISOString().replace(/[:.]/g, "-")}-${safePrefix}.png`;
     const path = join(dir, filename);
 
     await mkdir(dir, { recursive: true });
-    await writeFile(path, shot.png);
+    await writeFile(path, shot.png, { mode: 0o600 });
 
     await audit(
       "desktop_screenshot_save",
-      { target, monitorName: monitorName ?? null, windowId: windowId ?? null, path, width: shot.width, height: shot.height },
+      {
+        target,
+        monitorName: monitorName ?? null,
+        windowId: windowId ?? null,
+        path,
+        width: shot.width,
+        height: shot.height,
+      },
       dryRun,
     );
 
     return {
       content: [{ type: "text", text: path }],
-      structuredContent: { path, width: shot.width, height: shot.height, target },
+      structuredContent: { path, width: shot.width, height: shot.height, target, captureMethod: shot.captureMethod },
     };
   },
 );
@@ -107,6 +145,7 @@ server.registerTool(
       savePath: z.string().optional(),
     },
     annotations: {
+      desktopInput: false,
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
@@ -114,7 +153,8 @@ server.registerTool(
     },
   },
   async ({ x, y, width, height, savePath }) => {
-    const outPath = savePath ?? join(screenshotDirDefault, `${new Date().toISOString().replace(/[:.]/g, "-")}-area.png`);
+    const outPath =
+      savePath ?? join(screenshotDirDefault, `${new Date().toISOString().replace(/[:.]/g, "-")}-area.png`);
     if (dryRun) {
       await audit("desktop_screenshot_area", { x, y, width, height, path: outPath }, dryRun);
       return {

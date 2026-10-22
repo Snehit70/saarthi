@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { WindowId } from "./types.js";
 import { parsePngDimensions } from "./image.js";
+import { captureToplevel } from "./toplevel-capture.js";
 import {
   activeWindow,
   focusedWorkspaceName,
@@ -21,6 +22,7 @@ export async function captureScreenshot(input: {
   target: ScreenshotTarget;
   monitorName?: string;
   windowId?: WindowId;
+  allowFocus?: boolean;
 }): Promise<{
   png: Buffer;
   width: number;
@@ -28,6 +30,7 @@ export async function captureScreenshot(input: {
   target: ScreenshotTarget;
   geometry?: string;
   monitorName?: string;
+  captureMethod?: "toplevel" | "screen" | "focused-region";
 }> {
   const args = ["-"];
   let geometry: string | undefined;
@@ -43,6 +46,11 @@ export async function captureScreenshot(input: {
       let win =
         input.target === "active_window" ? await activeWindow() : await getWindowOrThrow(input.windowId as WindowId);
       if (!win) throw new HyprlandError("ACTIVE_WINDOW_MISSING", "No active window available");
+      if (!input.allowFocus) {
+        const png = await captureToplevel(win.id);
+        const { width, height } = parsePngDimensions(png);
+        return { png, width, height, target: input.target, captureMethod: "toplevel" };
+      }
       originalWorkspace = await focusedWorkspaceName();
       targetWorkspace = win.workspace;
       if (await switchWorkspaceIfNeeded(originalWorkspace, targetWorkspace)) {
@@ -78,6 +86,7 @@ export async function captureScreenshot(input: {
       target: input.target,
       geometry,
       monitorName: input.monitorName,
+      captureMethod: geometry ? "focused-region" : "screen",
     };
   } catch (error) {
     if (error instanceof HyprlandError) throw error;

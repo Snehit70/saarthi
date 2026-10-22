@@ -224,3 +224,26 @@ For repeated semantic work, a private JSON plan passed to `ui batch --window-id 
 Exit 18 means another Saarthi process owns desktop input. Wait for that operation to finish and inspect before retrying. The input lease releases on owner death; it does not protect against the user's keyboard or unrelated automation.
 
 After an accessibility invocation, treat `verificationRequired` literally. A successful advertised button action can precede its UI effect. Observe the expected task identity, saved count, or next-record identity before editing subsequent records. If a bounded wait ends with unchanged state, fail and inspect; do not continue using the previous task's data.
+
+## Background work and planning ahead
+
+Prefer non-disruptive operations when the user wants to keep working. `screenshot capture --target window --window-id ID` uses native surface capture by default, even on an inactive workspace. `screenshot workspace --workspace 4 --json` returns a private set of window PNGs and positions. View every screenshot you rely on. This is not an exact composited workspace scene. Missing capture support must fail without focusing; use `--allow-focus` only when foreground disruption is explicitly acceptable.
+
+`app launch-and-wait --app-name ALIAS --workspace 4` uses a silent launch rule by default. Verify the returned window and workspace, because applications can reuse existing windows. Ordinary keyboard, pointer and foreground accessibility actions still share the user's seat. Do not promise input isolation merely because a window is on another workspace.
+
+For browser work without global input, use the optional existing Open Browser Use connection:
+
+1. Inspect `open-browser-use profiles --connected` and select the task's actual browser/profile. Saarthi does not start or install a browser bridge.
+2. Use explicit `--browser-target`, `--profile` and a unique `--session-id` for `browser background-open/tabs/act/finish`. These commands control only their session's owned tabs. They never claim unrelated user tabs.
+3. Use a private, user-owned `chmod 600` JSON step file with `tabId`, exact `expectedUrl` and `action:"inspect"`. Inspect returns current control selectors. Resolve selectors again after navigation or layout changes. Password fields are unsupported.
+4. Choose `fill`, `click`, `read`, `files`, `wait-text` or `screenshot` using observed targets. `files` accepts explicit local paths, stages bounded file bytes, and attaches them without opening a native dialog or changing extension permissions. Hidden file inputs are supported. Verify the application's actual attachment list afterward; file-list readback is not server upload completion.
+5. Capture the owned background tab with a browser `screenshot` step. A native browser-window screenshot shows its physically selected tab, which can differ from the task's logical active tab.
+6. Finish with `browser background-finish`; keep owned tab ids only for a requested live handoff. Never close or move unrelated user tabs.
+
+Before a predictable sequence, plan 4–10 steps ahead based on current observations. Put the plan in a private JSON file and use `plan run --plan-file PATH`. Include an explicit owned tab allowlist and a browser connection. Native capture steps additionally declare window id, PID and allowed workspace. The executor supports browser actions and native capture, without global keyboard/mouse actions. Browser tab ownership does not establish the containing Hyprland workspace.
+
+Every browser mutation must immediately precede a same-tab `wait-text` checkpoint or a `read` checkpoint with `expectText`. Use checks that establish actual task progress, such as attachment names, saved indicators, next-record identity or the requested result. Pause planning at unknown navigation, permission, native-dialog or layout boundaries. Do not fill a plan with guesses to reach the minimum step count. Use a single background action when fewer than four steps are justified.
+
+The plan shares one browser connection and session lease, checks scope throughout, records durable progress before each operation and stops on the first failure. An existing plan id always refuses execution. Inspect the reported completed count, in-flight step and actual page; prepare a new id with only remaining work. Never blindly replay a completed or uncertain action. Confirmation fields require existing user authorization under the consent rules above.
+
+Examples and the full schema are in `docs/BACKGROUND-WORK.md`. Cross-origin frames, shadow-root selectors, trusted native events and system permission dialogs may require another supported workflow. Keep private plans, entered text, attachments and page output out of public logs and PRs.

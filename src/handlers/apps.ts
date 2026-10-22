@@ -1,18 +1,21 @@
 import { z } from "zod";
 import { audit } from "../lib/audit.js";
 import {
-  focusedWorkspaceName,
   HyprlandError,
   launchApp,
   listWindows,
   pickFirstEmptyWorkspace,
-  restoreWorkspaceIfNeeded,
 } from "../lib/hyprland.js";
 import { parseLaunchCommand, resolveWorkspaceRange } from "../lib/policy.js";
 import { APP_CATALOG, isLaunchCommandAvailable, resolveAppLaunchCommand } from "../lib/apps.js";
 import { waitForWindow } from "../lib/pointer.js";
 import { server } from "../registry.js";
 import { assertLaunchRateLimit, dryRun, policy } from "../runtime.js";
+
+const launchWorkspace = z.string()
+  .regex(/^(?:[1-9]\d?|(?:name|special):[A-Za-z0-9_-]{1,64})$/)
+  .refine(value => !/^\d+$/.test(value) || (Number(value) >= policy.workspace.min && Number(value) <= policy.workspace.max),
+    "Numeric workspace is outside the configured policy bounds");
 
 server.registerTool(
   "app_list",
@@ -64,7 +67,7 @@ server.registerTool(
     inputSchema: {
       command: z.string().min(1).max(240).optional(),
       appName: z.string().min(1).max(64).optional(),
-      workspace: z.string().optional(),
+      workspace: launchWorkspace.optional(),
       preferEmptyWorkspace: z.boolean().default(false),
       rangeStart: z.number().int().min(1).max(99).optional(),
       rangeEnd: z.number().int().min(1).max(99).optional(),
@@ -100,8 +103,7 @@ server.registerTool(
     }
 
     assertLaunchRateLimit();
-    const originalWorkspace = keepCurrentWorkspace ? await focusedWorkspaceName() : null;
-    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${parsed.normalized}` : parsed.normalized;
+    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}${keepCurrentWorkspace ? " silent" : ""}] ${parsed.normalized}` : parsed.normalized;
 
     const payload = {
       appName: appName ?? null,
@@ -128,10 +130,6 @@ server.registerTool(
     }
     try {
       await launchApp(launchCommand);
-
-      if (keepCurrentWorkspace) {
-        await restoreWorkspaceIfNeeded(originalWorkspace, targetWorkspace);
-      }
 
       await audit("app_launch", payload, dryRun, {
         requestId,
@@ -169,7 +167,7 @@ server.registerTool(
     inputSchema: {
       command: z.string().min(1).max(240).optional(),
       appName: z.string().min(1).max(64).optional(),
-      workspace: z.string().optional(),
+      workspace: launchWorkspace.optional(),
       preferEmptyWorkspace: z.boolean().default(false),
       rangeStart: z.number().int().min(1).max(99).optional(),
       rangeEnd: z.number().int().min(1).max(99).optional(),
@@ -209,8 +207,7 @@ server.registerTool(
       targetWorkspace = pickFirstEmptyWorkspace(windows, effectiveRange.rangeStart, effectiveRange.rangeEnd) ?? undefined;
     }
     assertLaunchRateLimit();
-    const originalWorkspace = args.keepCurrentWorkspace ? await focusedWorkspaceName() : null;
-    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}] ${parsed.normalized}` : parsed.normalized;
+    const launchCommand = targetWorkspace ? `[workspace ${targetWorkspace}${args.keepCurrentWorkspace ? " silent" : ""}] ${parsed.normalized}` : parsed.normalized;
     const payload = {
       appName: args.appName ?? null,
       command: parsed.normalized,
@@ -230,9 +227,6 @@ server.registerTool(
     try {
       if (!dryRun) {
         await launchApp(launchCommand);
-        if (args.keepCurrentWorkspace) {
-          await restoreWorkspaceIfNeeded(originalWorkspace, targetWorkspace);
-        }
       }
 
       const wait = await waitForWindow(

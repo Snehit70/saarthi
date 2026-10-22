@@ -166,8 +166,9 @@ function errorResult(error: unknown): CliResult {
   const details = Array.isArray((candidate as { candidates?: unknown }).candidates)
     ? `\nCandidates: ${JSON.stringify((candidate as { candidates: unknown[] }).candidates)}`
     : "";
+  const progress = (candidate as { details?: unknown }).details;
   return failure(
-    candidate?.code ? `[${candidate.code}] ${message}${details}` : message,
+    (candidate?.code ? `[${candidate.code}] ${message}${details}` : message) + (progress ? `\nProgress: ${JSON.stringify(progress)}` : ""),
     candidate?.code ? (ERROR_EXIT_CODES[candidate.code] ?? 1) : 2,
   );
 }

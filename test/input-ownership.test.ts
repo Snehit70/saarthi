@@ -52,6 +52,19 @@ it("supports nested actions in the same transaction and releases after failure",
   await expect(withDesktopInput(async () => true, path)).resolves.toBe(true);
 });
 
+it("does not skip acquisition of a different resource during a nested transaction", async () => {
+  const a = join(root, "a.lock"); const b = join(root, "b.lock");
+  let release!: () => void; let ready!: () => void;
+  const acquired = new Promise<void>(resolve => { ready = resolve; });
+  const held = withDesktopInput(async () => { ready(); await new Promise<void>(resolve => { release = resolve; }); }, b);
+  await acquired;
+  try {
+    await withDesktopInput(async () => {
+      await expect(withDesktopInput(async () => true, b)).rejects.toMatchObject({ code: "INPUT_BUSY" });
+    }, a);
+  } finally { release(); await held; }
+});
+
 it("releases kernel ownership when the parent process is killed", async () => {
   const path = join(root, "input.lock");
   const script = join(root, "owner.mts");

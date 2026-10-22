@@ -13,18 +13,20 @@ class InputOwnershipError extends Error {
     super(message);
   }
 }
-const ownership = new AsyncLocalStorage<AbortSignal>();
-export const inputOwnershipSignal = (): AbortSignal | undefined => ownership.getStore();
+const ownership = new AsyncLocalStorage<Map<string, AbortSignal>>();
+const currentOwnership = new AsyncLocalStorage<AbortSignal>();
+export const inputOwnershipSignal = (): AbortSignal | undefined => currentOwnership.getStore();
 
 /** Kernel-held lock scoped to one invocation. Parent death closes stdin and
  * releases the lock, including SIGKILL, without stale-PID or age deletion. */
 export async function withDesktopInput<T>(
   operation: () => Promise<T>,
   path = statePath("desktop-input.lock"),
+  resource = "desktop input",
 ): Promise<T> {
-  const inherited = ownership.getStore();
+  const inherited = ownership.getStore()?.get(path);
   if (inherited) {
-    if (inherited.aborted) throw new InputOwnershipError("INPUT_FAILED", "Desktop input ownership was lost");
+    if (inherited.aborted) throw new InputOwnershipError("INPUT_FAILED", `${resource} ownership was lost`);
     return operation();
   }
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
@@ -72,14 +74,15 @@ export async function withDesktopInput<T>(
             new InputOwnershipError(
               code === 73 ? "INPUT_BUSY" : "INPUT_FAILED",
               code === 73
-                ? "Another Saarthi invocation owns desktop input; wait for it to finish"
+                ? `Another Saarthi invocation owns ${resource}; wait for it to finish`
                 : "Desktop input ownership failed",
             ),
           );
       });
       child.stdin.write(`${token}\n`);
     });
-    return await ownership.run(controller.signal, operation);
+    return await ownership.run(new Map([...(ownership.getStore() ?? []), [path, controller.signal]]),
+      () => currentOwnership.run(controller.signal, operation));
   } finally {
     released = true;
     child.stdin.end();

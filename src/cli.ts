@@ -18,7 +18,7 @@ const captureTools = new Set([
   "screenshot_compare",
 ]);
 const result = await executeCli(process.argv.slice(2), registry, async (tool, args) => {
-  const ownsInput =
+  const ownsInput = tool.config.annotations?.desktopInput === false ? args.allowFocus === true :
     (!tool.config.annotations?.readOnlyHint && !tool.name.startsWith("overlay_task_")) ||
     tool.name.startsWith("desktop_screenshot") ||
     captureTools.has(tool.name);
