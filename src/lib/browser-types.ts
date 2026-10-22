@@ -109,6 +109,7 @@ export interface BrowserReadinessResult {
 export type BrowserOpenMode = "new-tab" | "new-window" | "current-tab";
 
 export interface BrowserOpenUrlResult {
+  profile?: import("./browser-profiles.js").NativeProfile | null;
   effectiveMode: BrowserOpenMode | "new-window-fallback";
   reusableWindow: WindowInfo | null;
   targetWindow: WindowInfo | null;

@@ -1,3 +1,5 @@
+import { resolveBrowserProfile, type NativeProfile } from "./browser-profiles.js";
+import { desktopEnvironment } from "./desktop-environment.js";
 import { spawn } from "node:child_process";
 import { assertWindowFocus, focusWindow, HyprlandError, sendShortcut } from "./hyprland.js";
 import {
@@ -181,11 +183,16 @@ export async function resolveBrowserLaunch(browser: BrowserId, launch: LaunchPol
   return command;
 }
 
-async function spawnBrowser(command: string, url: string, launch: LaunchPolicy): Promise<void> {
+async function spawnBrowser(command: string, url: string, launch: LaunchPolicy, profile?: NativeProfile): Promise<void> {
   const parsed = parseLaunchCommand(command, launch);
-  const windowArgs = ["--new-window", url];
+  const windowArgs = [
+    ...(profile ? [`--user-data-dir=${profile.userDataDir}`, `--profile-directory=${profile.directory}`] : []),
+    "--new-window",
+    url,
+  ];
+  const env = await desktopEnvironment();
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(parsed.executable, [...parsed.args, ...windowArgs], { detached: true, stdio: "ignore" });
+    const child = spawn(parsed.executable, [...parsed.args, ...windowArgs], { env, detached: true, stdio: "ignore" });
     child.once("error", reject);
     child.once("spawn", () => {
       child.unref();
@@ -197,6 +204,7 @@ async function spawnBrowser(command: string, url: string, launch: LaunchPolicy):
 export async function openBrowserUrl(args: {
   browser: BrowserId;
   windowId?: string;
+  profile?: string;
   url: string;
   mode: BrowserOpenMode;
   titleContains?: string;
@@ -213,6 +221,12 @@ export async function openBrowserUrl(args: {
   dryRun?: boolean;
 }): Promise<BrowserOpenUrlResult> {
   const url = validateBrowserUrl(args.url);
+  if (args.profile && (args.windowId || args.mode !== "new-window"))
+    throw new HyprlandError(
+      "INPUT_FAILED",
+      "Profile selection requires a new window and cannot reuse an unverified window id",
+    );
+  const profile = args.profile ? await resolveBrowserProfile(args.browser, args.profile) : undefined;
   if (url === "about:home" && browserDefinition(args.browser).family === "chromium") {
     throw new HyprlandError(
       "INPUT_FAILED",
@@ -240,6 +254,7 @@ export async function openBrowserUrl(args: {
   const command = reusableWindow ? null : await resolveBrowserLaunch(args.browser, args.launch);
   if (args.dryRun)
     return {
+      profile: profile ?? null,
       effectiveMode,
       reusableWindow,
       targetWindow: reusableWindow,
@@ -268,7 +283,7 @@ export async function openBrowserUrl(args: {
     targetWindow = reusableWindow;
   } else {
     args.beforeLaunch();
-    await spawnBrowser(command!, url, args.launch);
+    await spawnBrowser(command!, url, args.launch, profile);
     const wait = await waitForBrowserWindowAfterLaunch({
       ...args,
       baselineIds: new Set(before.map((window) => window.id)),
@@ -293,5 +308,5 @@ export async function openBrowserUrl(args: {
     pollMs: args.readyPollMs,
     listWindows: args.listWindows,
   });
-  return { effectiveMode, reusableWindow, targetWindow, command, attempts, wasNewWindow, titleBefore, readiness };
+  return { profile: profile ?? null, effectiveMode, reusableWindow, targetWindow, command, attempts, wasNewWindow, titleBefore, readiness };
 }

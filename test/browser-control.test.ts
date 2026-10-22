@@ -1,3 +1,4 @@
+vi.mock("../src/lib/desktop-environment.js",()=>({desktopEnvironment:async()=>({...process.env})}));
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WindowInfo } from "../src/lib/types.js";
@@ -287,7 +288,7 @@ describe("browser navigation and launch policy", () => {
       mode: "new-window",
       listWindows: async () => (++calls === 1 ? [] : [window({ class: "firefox" })]),
     });
-    expect(mocks.spawn).toHaveBeenCalledWith("firefox", ["--new-window", url], { detached: true, stdio: "ignore" });
+    expect(mocks.spawn).toHaveBeenCalledWith("firefox", ["--new-window", url], expect.objectContaining({ detached: true, stdio: "ignore" }));
     expect(args.beforeLaunch).toHaveBeenCalledTimes(1);
     expect(result.wasNewWindow).toBe(true);
   });

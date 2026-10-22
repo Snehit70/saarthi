@@ -98,6 +98,7 @@ server.registerTool(
     inputSchema: {
       ...browserTarget,
       url: z.string().min(1).max(2048),
+      profile: z.string().trim().min(1).max(200).optional().describe("Existing Chromium profile directory or unique display name. Opens a new window; never infers a numeric profile index."),
       mode: z.enum(["new-tab", "new-window", "current-tab"]).optional().describe("Default: new-tab"),
       reuseExisting: z.boolean().optional().describe("Compatibility flag used only when mode is omitted."),
       currentTabReason: z.enum(["blank-page-verified", "user-said-here"]).optional(),
@@ -114,7 +115,7 @@ server.registerTool(
   async (args) => {
     const started = Date.now();
     const url = validateBrowserUrl(args.url);
-    const mode = args.mode ?? (args.reuseExisting === false ? "new-window" : "new-tab");
+    const mode = args.mode ?? (args.profile || args.reuseExisting === false ? "new-window" : "new-tab");
     const readinessMode = defaultReadinessMode(url, args.readiness);
     if (readinessMode === "title-contains" && !args.readyTitleContains)
       throw new HyprlandError("INPUT_FAILED", "title-contains readiness requires readyTitleContains");
@@ -129,7 +130,7 @@ server.registerTool(
         ? (await discoverLocalBrowsers(policy.launch, windows)).primary
         : null;
     const browser = selectBrowser(windows, args.browser, args.windowId, fallback, args.titleContains);
-    const payload = { browser, windowId: args.windowId, url, mode, readiness: readinessMode };
+    const payload = { browser, windowId: args.windowId, profile: args.profile, url, mode, readiness: readinessMode };
     await audit("browser_open_url", payload, dryRun, { status: "started" });
     try {
       const result = await openBrowserUrl({
@@ -156,6 +157,9 @@ server.registerTool(
       );
       const output = {
         opened: !dryRun,
+        verificationRequired: !dryRun,
+        verification: dryRun ? "none" : readinessMode === "none" ? "dispatch-only" : "title-heuristic",
+        profile: result.profile ?? null,
         dryRun,
         browser,
         url,
