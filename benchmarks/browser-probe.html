@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <title>Saarthi browser attachment probe</title>
+  <style>
+    body { max-width: 65rem; margin: 3rem auto; font: 20px/1.5 system-ui; padding: 0 2rem; }
+    input, button { font: inherit; margin: 1rem 0; }
+    img { width: 90px; height: 90px; object-fit: contain; border: 1px solid #999; margin-right: 1rem; }
+    code { overflow-wrap: anywhere; font-size: .75em; }
+    li { margin: 1rem 0; }
+  </style>
+  <h1>Browser attachment probe</h1>
+  <p>This local page reads selected files in the browser and shows their SHA-256 hashes. It sends no network requests.</p>
+  <label for="images">Attach images to this draft only</label><br>
+  <input id="images" type="file" accept="image/*" multiple autofocus>
+  <p id="status" role="status">No files attached</p>
+  <ol id="results"></ol>
+  <p>Unrelated draft: <textarea id="other">Preserve this unrelated draft.</textarea></p>
+  <button id="download" disabled>Download verification report</button>
+  <script>
+    const input = document.querySelector('#images');
+    const list = document.querySelector('#results');
+    const status = document.querySelector('#status');
+    const download = document.querySelector('#download');
+    let report;
+    let previewUrls = [];
+    input.addEventListener('change', async () => {
+      download.disabled = true;
+      previewUrls.forEach(URL.revokeObjectURL);
+      previewUrls = [];
+      list.replaceChildren();
+      const files = [];
+      for (const file of input.files) {
+        const bytes = await file.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        files.push({ name: file.name, bytes: file.size, sha256 });
+        const item = document.createElement('li');
+        const preview = document.createElement('img');
+        const url = URL.createObjectURL(file);
+        previewUrls.push(url);
+        preview.src = url;
+        preview.alt = file.name;
+        const label = document.createElement('span');
+        label.textContent = file.name + ' (' + file.size + ' bytes) ';
+        const hash = document.createElement('code');
+        hash.textContent = sha256;
+        item.append(preview, label, hash);
+        list.append(item);
+      }
+      report = { files, otherDraft: document.querySelector('#other').value, sent: 0 };
+      status.textContent = files.length + ' files attached; unrelated draft preserved: ' + (report.otherDraft === 'Preserve this unrelated draft.');
+      document.title = 'Saarthi probe: ' + files.length + ' attachments';
+      download.disabled = false;
+    });
+    download.addEventListener('click', () => {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'saarthi-browser-verification.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+  </script>
+</html>

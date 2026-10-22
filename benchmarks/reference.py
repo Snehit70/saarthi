@@ -61,6 +61,43 @@ class Controller:
             "text",
         )["text"]
 
+    def wait_for_brief(
+        self, task, predicate=lambda source: True, initial=None, timeout=5
+    ):
+        deadline = time.monotonic() + timeout
+        while True:
+            source = (
+                initial
+                if initial is not None
+                else json.loads(self.read(task, "Task brief"))
+            )
+            if source.get("task", {}).get("id") == task and predicate(source):
+                return source
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    "Task state did not advance; inspect before retrying any action"
+                )
+            initial = None
+
+    def verify_saved(self, task, count=1):
+        deadline = time.monotonic() + 5
+        while True:
+            result = self.command(
+                task,
+                "ui",
+                "read-text",
+                "--window-id",
+                self.window,
+                "--name",
+                "Workflow status",
+                "--role",
+                "label",
+            )
+            if result["text"].startswith(f"Saved {count} draft(s)"):
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Save was not observed; inspect before retrying")
+
     def images(self, task, count, reverse=False, oldest_only=False):
         images = self.command(task, "clipboard", "images", "--limit", "4")["images"]
         selected = images[:count]
@@ -138,7 +175,7 @@ class Controller:
                 {"name": "Load task", "role": "button", "action": "invoke"},
             ],
         )
-        source = json.loads(self.read(task_id, "Task brief"))
+        source = self.wait_for_brief(task_id)
         approved = source["approved"]
         base = source["baseline"]
         rows = source["rows"]
@@ -297,13 +334,13 @@ class Controller:
                         )
                     result = self.batch(task_id, edits)
                     if not last:
-                        source = json.loads(result["steps"][-1]["text"])
-                        deadline = time.monotonic() + 2
-                        while (
-                            source["currentRecord"]["Title"] == current["Title"]
-                            and time.monotonic() < deadline
-                        ):
-                            source = json.loads(self.read(task_id, "Task brief"))
+                        source = self.wait_for_brief(
+                            task_id,
+                            lambda value: (
+                                value["currentRecord"]["Title"] != current["Title"]
+                            ),
+                            initial=json.loads(result["steps"][-1]["text"]),
+                        )
                 index += 1
                 if last:
                     break
@@ -312,17 +349,7 @@ class Controller:
                         self.action(task_id, "Ghost composer", "focus")
                     except RuntimeError:
                         pass
-            self.command(
-                task_id,
-                "ui",
-                "read-text",
-                "--window-id",
-                self.window,
-                "--name",
-                "Workflow status",
-                "--role",
-                "label",
-            )
+            self.verify_saved(task_id, index)
             return
         else:
             key = {
@@ -380,17 +407,7 @@ class Controller:
             self.click(task_id, "Delayed save")
         else:
             self.click(task_id, "Save draft")
-        self.command(
-            task_id,
-            "ui",
-            "read-text",
-            "--window-id",
-            self.window,
-            "--name",
-            "Workflow status",
-            "--role",
-            "label",
-        )
+        self.verify_saved(task_id)
 
 
 if __name__ == "__main__":

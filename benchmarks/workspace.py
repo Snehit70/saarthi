@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from pathlib import Path
 import gi
 
@@ -22,8 +23,17 @@ class Workspace(Gtk.Application):
             )["directory"]
         self.root = Path(configured).resolve()
         self.connect("activate", self.activate)
+        self.connect("shutdown", lambda *_: self.event("shutdown"))
+
+    def event(self, name, **details):
+        with (self.root / "fixture-events.jsonl").open("a") as handle:
+            handle.write(
+                json.dumps(dict(at=time.time(), pid=os.getpid(), event=name, **details))
+                + "\n"
+            )
 
     def activate(self, app):
+        self.event("activate")
         self.clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         self.png_target = Gdk.Atom.intern("image/png", False)
         self.window = Gtk.ApplicationWindow(
@@ -80,7 +90,13 @@ class Workspace(Gtk.Application):
         self.status = Gtk.Label(label="No task loaded")
         self.status.get_accessible().set_name("Workflow status")
         box.pack_start(self.status, False, False, 0)
-        self.window.connect("delete-event", lambda *_: self.quit())
+
+        def close(*_):
+            self.event("close-request")
+            self.quit()
+            return False
+
+        self.window.connect("delete-event", close)
         self.window.show_all()
 
     def text(self, parent, name, height, editable):
@@ -97,7 +113,17 @@ class Workspace(Gtk.Application):
     def button(self, parent, name, callback):
         button = Gtk.Button(label=name)
         button.get_accessible().set_name(name)
-        button.connect("clicked", callback)
+
+        def dispatched(*args):
+            try:
+                callback(*args)
+            except Exception as error:
+                self.event(
+                    "callback-error", control=name, errorType=type(error).__name__
+                )
+                self.status.set_text("Fixture callback failed: " + type(error).__name__)
+
+        button.connect("clicked", dispatched)
         parent.pack_start(button, False, False, 0)
         return button
 
@@ -107,6 +133,7 @@ class Workspace(Gtk.Application):
 
     def load(self, *_):
         case = self.case.get_text()
+        self.event("load-request", taskId=case)
         if case not in {
             task["id"]
             for task in json.loads((self.root / "catalog.json").read_text())["tasks"]
@@ -128,6 +155,7 @@ class Workspace(Gtk.Application):
         self.send.set_sensitive(not case.endswith("disabled-send"))
         self.update_brief()
         self.status.set_text("Loaded " + case)
+        self.event("loaded", taskId=case)
 
     def update_brief(self):
         public = {

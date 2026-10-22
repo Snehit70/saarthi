@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
 from fixtures import prepare_case, grade_case
 import run as benchmark
+from reference import Controller
 
 
 class BenchmarkTests(unittest.TestCase):
@@ -178,6 +179,41 @@ class BenchmarkTests(unittest.TestCase):
             ),
             (64, 64, 0, 0),
         )
+
+    def test_reference_waits_for_task_identity_without_replaying_load(self):
+        controller = Controller(self.root, "0x1")
+        old = dict(task=dict(id="old-task"))
+        new = dict(task=dict(id=self.task["id"]), currentRecord=dict(Title="Record 1"))
+        with patch.object(
+            controller, "read", side_effect=[json.dumps(old), json.dumps(new)]
+        ) as read:
+            self.assertEqual(controller.wait_for_brief(self.task["id"]), new)
+            self.assertEqual(read.call_count, 2)
+        with patch.object(controller, "read", return_value=json.dumps(old)):
+            with self.assertRaisesRegex(RuntimeError, "did not advance"):
+                controller.wait_for_brief(self.task["id"], timeout=0)
+
+    def test_reference_rejects_stale_sequence_and_unobserved_save(self):
+        controller = Controller(self.root, "0x1")
+        stale = dict(
+            task=dict(id=self.task["id"]), currentRecord=dict(Title="Record 1")
+        )
+        with patch.object(controller, "read", return_value=json.dumps(stale)):
+            with self.assertRaisesRegex(RuntimeError, "did not advance"):
+                controller.wait_for_brief(
+                    self.task["id"],
+                    lambda source: source["currentRecord"]["Title"] == "Record 2",
+                    timeout=0,
+                )
+        with (
+            patch.object(
+                controller, "command", return_value=dict(text="Duplicate save rejected")
+            ) as command,
+            patch("reference.time.monotonic", side_effect=[0, 10]),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Save was not observed"):
+                controller.verify_saved(self.task["id"])
+            self.assertEqual(command.call_count, 1)
 
 
 if __name__ == "__main__":

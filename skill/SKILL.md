@@ -222,3 +222,5 @@ The preferred original clipboard MIME is restored, including an empty selection.
 For repeated semantic work, a private JSON plan passed to `ui batch --window-id ID --steps-file PATH` reduces process overhead. Maximum 20 steps; every target is re-resolved and every text write checked. On a partial failure inspect completed work before constructing a new plan. Never replay the entire batch blindly.
 
 Exit 18 means another Saarthi process owns desktop input. Wait for that operation to finish and inspect before retrying. The input lease releases on owner death; it does not protect against the user's keyboard or unrelated automation.
+
+After an accessibility invocation, treat `verificationRequired` literally. A successful advertised button action can precede its UI effect. Observe the expected task identity, saved count, or next-record identity before editing subsequent records. If a bounded wait ends with unchanged state, fail and inspect; do not continue using the previous task's data.

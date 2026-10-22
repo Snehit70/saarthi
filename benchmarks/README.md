@@ -60,3 +60,11 @@ The next external track should use [OSWorld's real-application tasks and executi
 - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) supplies MIME-specific Wayland selection operations.
 - [OpenAI computer-use integration recipes](https://developers.openai.com/api/docs/guides/tools-computer-use-integration) distinguish screenshot-based interaction and custom computer tooling. This is API integration guidance, not a published Codex benchmark result.
 - [OSWorld](https://github.com/xlang-ai/OSWorld) informs the use of task outcomes rather than successful input dispatch as the completion criterion.
+
+## Recorded runs
+
+The [2026-10-22 pilot](results/2026-10-22-pilot.json) passed 50/64 cases, failed four, and left ten unrun after the fixture window disappeared. All clipboard, document, data, form, file, and short recovery cases passed, as did the 10- and 20-record workflows. The 30-record case read stale task state and produced no artifact; later cases also failed before the window disappeared. This is an incomplete pilot, not a final candidate score. The subsequent controller adds task-identity, record-advancement, and observed-save checks, with a fresh full run still required. A prior native fixture crash was confirmed by a core dump; this run's disappearance had no matching core dump, so its cause remains unverified.
+
+In this pilot, four-image paste took about 3 seconds after fixing inherited `wl-copy` output pipes, compared with about 23 seconds in an earlier local pilot. The complete recent-four task took about 6.4 seconds including setup and verification. These are local fixture observations, not portable latency promises.
+
+The optional [browser attachment probe](browser-probe.html) is a local HTML page for native browser file-chooser checks. Open it through the browser's Open File dialog, attach synthetic exported images, and compare its browser-computed SHA-256 report with the exported hashes. It makes no external requests. This probe is not part of the 64-case score and has not been run in the recorded pilot.
