@@ -93,6 +93,13 @@ const elementProgram = String.raw`async (args) => {
     if (!args.confirmed && node.form && (node.type === "submit" || node.type === "image")) throw new Error("Form submission requires confirmation");
     if (node instanceof HTMLInputElement && node.type === "file") throw new Error("Use a files action instead of opening a native chooser");
     if (node instanceof HTMLLabelElement && node.control?.type === "file") throw new Error("Use a files action instead of opening a native chooser");
+    // Many apps (WhatsApp chat rows, menus) act on pointer/mouse down rather than click.
+    const box = node.getBoundingClientRect();
+    const point = {bubbles:true,cancelable:true,composed:true,view:window,button:0,clientX:box.left+box.width/2,clientY:box.top+box.height/2};
+    node.dispatchEvent(new PointerEvent("pointerdown",{...point,buttons:1,pointerId:1,pointerType:"mouse",isPrimary:true}));
+    node.dispatchEvent(new MouseEvent("mousedown",{...point,buttons:1}));
+    node.dispatchEvent(new PointerEvent("pointerup",{...point,buttons:0,pointerId:1,pointerType:"mouse",isPrimary:true}));
+    node.dispatchEvent(new MouseEvent("mouseup",{...point,buttons:0}));
     node.click(); return {clicked:true,verificationRequired:true};
   }
   if (args.action === "fill") {
@@ -148,8 +155,10 @@ const fileProgram = String.raw`(args) => {
   if(state.files.length>1&&!node.multiple)throw new Error("File input no longer accepts multiple files");
   const data=new DataTransfer();for(const file of state.files)data.items.add(file);
   node.files=data.files;delete globalThis[args.key];
+  // Read back before dispatching change: apps often replace the input once they consume its files.
+  const attached=Array.from(node.files).map(file=>({name:file.name,bytes:file.size}));
   node.dispatchEvent(new Event("input",{bubbles:true}));node.dispatchEvent(new Event("change",{bubbles:true}));
-  return true;
+  return {attached};
 }`;
 const mimeTypes: Record<string, string> = {
   ".png":"image/png", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".webp":"image/webp", ".gif":"image/gif",
@@ -255,15 +264,19 @@ export class BackgroundBrowser {
       );
     return z.record(z.unknown()).parse(response.result?.value);
   }
-  private async transferFiles(step: BrowserStep, paths: string[]): Promise<void> {
+  /** Returns the file list read from the input immediately after assignment. */
+  private async transferFiles(step: BrowserStep, paths: string[]): Promise<unknown> {
     const key = `__saarthi_files_${randomBytes(16).toString("hex")}`;
-    const call = async (args: Record<string, unknown>) => {
+    const call = async (args: Record<string, unknown>): Promise<unknown> => {
       const response = await this.cdp(step.tabId, "Runtime.evaluate", {
         expression: `(${fileProgram})(${JSON.stringify({ key, expectedUrl: step.expectedUrl, selector: step.selector, ...args })})`,
         returnByValue: true,
       });
-      if (response.exceptionDetails || response.result?.value !== true)
+      const value = response.result?.value;
+      const attaching = args.op === "attach" || args.op === "bundle";
+      if (response.exceptionDetails || (attaching ? !Array.isArray(value?.attached) : value !== true))
         throw new HyprlandError("INPUT_FAILED", "Browser file transfer failed; inspect before retrying");
+      return attaching ? value.attached : value;
     };
     try {
       const sizes = await Promise.all(paths.map(path => stat(path)));
@@ -291,8 +304,7 @@ export class BackgroundBrowser {
               mime: mimeTypes[extname(path).toLowerCase()] ?? "application/octet-stream", base64: data.subarray(0, length).toString("base64") });
           } finally { await file.close(); }
         }
-        await call({ op: "bundle", files: bundle });
-        return;
+        return await call({ op: "bundle", files: bundle });
       }
       await call({ op: "begin" });
       let total = 0;
@@ -320,7 +332,7 @@ export class BackgroundBrowser {
             mime: mimeTypes[extname(path).toLowerCase()] ?? "application/octet-stream" });
         } finally { await file.close(); }
       }
-      await call({ op: "attach" });
+      return await call({ op: "attach" });
     } finally {
       // Cleanup has no input effect and must not hide an uncertain attach error.
       await call({ op: "cleanup" }).catch(() => {});
@@ -356,10 +368,9 @@ export class BackgroundBrowser {
       const target = await this.evaluate(step);
       if (paths.length > 1 && !target.multiple)
         throw new HyprlandError("INPUT_FAILED", "File input does not accept multiple files");
-      await this.transferFiles(step, paths);
-      const result = await this.evaluate(step);
+      const attached = await this.transferFiles(step, paths);
       const expected = paths.map((path, index) => ({ name: basename(path), bytes: metadata[index].size }));
-      const observed = z.array(z.object({ name: z.string(), bytes: z.number().int().nonnegative() })).parse(result.files);
+      const observed = z.array(z.object({ name: z.string(), bytes: z.number().int().nonnegative() })).parse(attached);
       if (observed.length !== expected.length || observed.some((file, index) => file.name !== expected[index].name || file.bytes !== expected[index].bytes))
         throw new HyprlandError("INPUT_FAILED", "Selected file list did not match; inspect before retrying");
       return { files: expected, verifiedFileList: true, transferMethod: "explicit-file-bytes", verificationRequired: true };
