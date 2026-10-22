@@ -185,7 +185,7 @@ saarthi input key-press --window-id 0xABC --key escape --json
 
 Inspect the returned screenshot before choosing an OCR query. Page content can differ from its window title. A readiness timeout exits 17, and a missing target exits 11. Inspect before retrying navigation or any action that may already have happened.
 
-Use the caller's actual `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, and D-Bus session environment for input, capture, and AT-SPI. Saarthi discovers the Hyprland signature for compositor reads and passes it to focused AT-SPI lookup. It does not guess a Wayland display or start a new session. Empty page accessibility results require OCR/grid or screenshot targeting.
+Host commands use the caller's actual `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, and D-Bus session environment for input, capture, and AT-SPI. Saarthi discovers the Hyprland signature for compositor reads and passes it to focused AT-SPI lookup. Host adapters do not guess a Wayland display or start a new session. The explicitly requested `desktop start` backend creates its own session as documented below. Empty page accessibility results require OCR/grid or screenshot targeting.
 
 The installed wtype may reject `-d 0`; the shared adapter omits the delay flag at zero. A harmless adapter installation check is `wtype - </dev/null` in the real Wayland session. Actual text is always sent through stdin.
 
@@ -204,3 +204,19 @@ The benchmark fixture is an optional policy-approved desktop application. It doe
 See [BACKGROUND-WORK.md](BACKGROUND-WORK.md) for the private plan schema, file-input workflow and failure recovery. Build the native helper with `bun run build:native`. Its build is optional when prerequisites are missing, but scanner/compiler errors fail once prerequisites exist. CI requires it.
 
 The browser adapter requires an existing connected Open Browser Use profile. A missing or ambiguous connection fails without launching anything. Browser session leases are separate from the desktop input lease and conflicts also exit 18. Never delete a live lease file. Plan receipts in `~/.local/state/saarthi/plans/` refuse duplicate ids, including after partial failure. Inspect an error's completedSteps and inFlightStep before writing a new plan. A timeout does not establish that an action had no effect.
+
+## Private desktop input
+
+See [ISOLATED-DESKTOP.md](ISOLATED-DESKTOP.md) for dependencies, action files, native
+file pickers, profiles and recovery. `desktop start` explicitly creates a separate
+headless display; normal host commands still use the caller's actual session.
+Inspect existing desktop ids before starting more. Use `desktop status` and view
+`desktop capture` without switching host workspaces. Always save requested work
+before `desktop stop` closes session-owned applications.
+
+A startup error names the private compositor log. Inspect that desktop's `bus.log`
+and `input-devices.log` if dialogs or devices fail. A retained keyboard failure
+requires stopping and recreating the session; never redirect it to the host.
+Private portal behavior depends on installed desktop backends. A launch timeout
+can leave an app still starting: inspect status before trying again. Private
+profiles and logs remain in the runtime after stop; stop only terminates processes.

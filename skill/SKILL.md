@@ -180,7 +180,7 @@ saarthi browser action --window-id 0xABC --action find --query "Sign in" --json
 
 Supported identities are Zen, Firefox, LibreWolf, Floorp, Helium, Chromium, Chrome, Brave, Vivaldi, and Edge. Automatic selection prefers the focused browser, then a single running identity. Specify a browser or exact window when matches are ambiguous. A running browser can be reused even if its launcher is unavailable. Actual launches still require policy approval and a launch slot.
 
-Use existing browser profiles. Do not change preferences, inspect credentials, or create clean profiles for user-facing work. Zen workspace stepping remains Zen-only and uses configured shortcuts.
+Use existing browser profiles for host browser work. Do not change their preferences or inspect credentials. An explicitly requested isolated desktop uses its own fresh automation profiles through `desktop launch`; never attach these to the host profile. Zen workspace stepping remains Zen-only and uses configured shortcuts.
 
 Use accessibility when available, then OCR/grid. Phrase OCR supports labels such as "Sign in" on the same line. Check the actual screenshot before choosing a query. Empty AT-SPI page results are a routing signal, not evidence that the page has no controls.
 
@@ -188,7 +188,7 @@ For a configured Vimium extension, `browser vimium-hint --visible-text` sends an
 
 Title readiness is only a heuristic. URL opening exits `17` on readiness timeout even when navigation may already have occurred. Inspect before retrying to avoid duplicate tabs or repeated actions. `browser action` and Vimium return `verificationRequired`; verify with page accessibility, OCR, or a fresh screenshot.
 
-Input is global foreground input, including across different workspaces. Set `--window-id` on `input type` and `input key-press` to reject focus drift. Focus checks reduce accidental input but do not provide background isolation or an atomic transaction with the compositor.
+The `input` commands send global foreground input, including across different Hyprland workspaces. Use the separate `desktop` commands for independent native input. Set `--window-id` on `input type` and `input key-press` to reject focus drift. Focus checks reduce accidental input but do not provide background isolation or an atomic transaction with the compositor.
 
 ## Hyprland Adapter Safety
 
@@ -247,3 +247,35 @@ Every browser mutation must immediately precede a same-tab `wait-text` checkpoin
 The plan shares one browser connection and session lease, checks scope throughout, records durable progress before each operation and stops on the first failure. An existing plan id always refuses execution. Inspect the reported completed count, in-flight step and actual page; prepare a new id with only remaining work. Never blindly replay a completed or uncertain action. Confirmation fields require existing user authorization under the consent rules above.
 
 Examples and the full schema are in `docs/BACKGROUND-WORK.md`. Cross-origin frames, shadow-root selectors, trusted native events and system permission dialogs may require another supported workflow. Keep private plans, entered text, attachments and page output out of public logs and PRs.
+
+## Independent native desktop
+
+For native tasks that must run while the user keeps typing or moving their mouse,
+use `desktop start`. This launches a private headless Sway desktop with a separate
+seat. A hidden Hyprland workspace alone does not provide this isolation.
+
+1. Start one desktop only when needed, then keep its returned id. Inspect existing
+   task state before creating another. At most three desktops may run.
+2. Launch policy aliases through `desktop launch --desktop-id ID --app-name APP`.
+   Apps must start inside the private desktop. Existing host windows cannot move
+   into it. Private browser profiles do not inherit logins or extensions.
+3. Read `desktop status` and view `desktop capture`. Its integer window ids belong
+   to the private Sway tree and must never be passed to host Hyprland commands.
+4. Write 1 to 10 typed actions to a private mode-600 JSON file. Each action requires
+   the current private window id and exact PID. Run `desktop input --desktop-id ID
+   --actions-file PATH`. Use observed coordinates and verify actual app state.
+5. For native file pickers, inspect again after opening the dialog. Use its new
+   window id and PID, Ctrl+L, the requested absolute path and an explicit navigation
+   Enter. Verify selected filenames or attachments after the picker closes.
+6. Stop on unknown state or partial failure. Inspect the uncertain action before
+   preparing the remaining batch. A successful receipt proves dispatch, not task
+   completion. Do not automatically replay a failed batch.
+7. Save requested artifacts, then call `desktop stop` when finished. This closes
+   session-owned apps, bus, compositor and device clients. Never signal host apps.
+
+The latest keyboard client stays alive until its replacement is active, with no
+command listener. If it dies, stop and recreate the desktop. No input falls back
+to the host. Different desktops use separate input leases. They share the user's
+filesystem, so this is not a security sandbox. Software rendering and Wayland-only
+apps limit compatibility. Use the existing background browser adapter for logged-in
+tab tasks. Full schemas and limitations: `docs/ISOLATED-DESKTOP.md`.

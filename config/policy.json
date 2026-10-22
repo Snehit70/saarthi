@@ -13,7 +13,8 @@
       "edge",
       "zathura",
       "kitty",
-      "benchmark-fixture"
+      "benchmark-fixture",
+      "isolated-desktop"
     ],
     "deniedExecutables": [
       "sudo",

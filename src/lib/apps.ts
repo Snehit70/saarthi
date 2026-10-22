@@ -1,4 +1,5 @@
 import { projectRoot } from "./paths.js";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { BROWSERS } from "./browser-catalog.js";
 import { execFile } from "node:child_process";
@@ -18,6 +19,7 @@ export interface AppCatalogEntry {
 }
 
 export const APP_CATALOG: AppCatalogEntry[] = [
+  { name: "isolated-desktop", description: "Private headless compositor for independent agent input.", commands: ["sway", join(homedir(), ".local/share/saarthi/compositor/usr/bin/sway")] },
   {
     name: "benchmark-fixture",
     description: "Local GTK benchmark workspace, enabled only by explicit launch policy.",

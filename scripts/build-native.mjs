@@ -10,43 +10,56 @@ let flags;
 try {
   execFileSync("cc", ["--version"], { stdio: "ignore" });
   execFileSync("wayland-scanner", ["--version"], { stdio: "ignore" });
-  flags = execFileSync("pkg-config", ["--cflags", "--libs", "wayland-client"], { encoding: "utf8" })
+  flags = execFileSync(
+    "pkg-config",
+    ["--cflags", "--libs", "wayland-client", "xkbcommon"],
+    { encoding: "utf8" },
+  )
     .trim()
     .split(/\s+/);
 } catch (error) {
   if (process.env.SAARTHI_REQUIRE_NATIVE === "1") throw error;
-  process.stderr.write("Native capture helper unavailable. Install a C compiler, pkg-config, wayland-scanner and Wayland development headers, then run bun run build:native.\n");
+  process.stderr.write(
+    "Native capture helper unavailable. Install a C compiler, pkg-config, wayland-scanner and Wayland and xkbcommon development headers, then run bun run build:native.\n",
+  );
   process.exit(0);
 }
 // Once prerequisites exist, scanner/compiler failures must fail the build.
 {
-  const protocols = readdirSync(join(root, "native/protocols")).filter((name) => name.endsWith(".xml"));
+  const protocols = readdirSync(join(root, "native/protocols")).filter((name) =>
+    name.endsWith(".xml"),
+  );
   const sources = [];
   for (const protocol of protocols) {
     const name = protocol.slice(0, -4);
     const input = join(root, "native/protocols", protocol);
-    execFileSync("wayland-scanner", ["client-header", input, join(output, `${name}-client-protocol.h`)]);
+    execFileSync("wayland-scanner", [
+      "client-header",
+      input,
+      join(output, `${name}-client-protocol.h`),
+    ]);
     const source = join(output, `${name}-protocol.c`);
     execFileSync("wayland-scanner", ["private-code", input, source]);
     sources.push(source);
   }
-  execFileSync(
-    "cc",
-    [
-      "-std=c11",
-      "-O2",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-I",
-      output,
-      join(root, "native/toplevels.c"),
-      ...sources,
-      ...flags,
-      "-o",
-      join(output, "toplevels"),
-    ],
-    { stdio: "inherit" },
-  );
-  process.stdout.write("Built native window capture mapping helper\n");
+  for (const helper of ["toplevels", "pointer", "keyboard"])
+    execFileSync(
+      "cc",
+      [
+        "-std=c11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-I",
+        output,
+        join(root, `native/${helper}.c`),
+        ...sources,
+        ...flags,
+        "-o",
+        join(output, helper),
+      ],
+      { stdio: "inherit" },
+    );
+  process.stdout.write("Built native capture and isolated input helpers\n");
 }

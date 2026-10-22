@@ -103,9 +103,24 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "clipboard_paste_images",
   },
   {
+    "command": "desktop capture",
+    "schemaSha256": "0ec983174160d68881d524ddf298c4496707dac33f42eb98422be2a530ce0305",
+    "tool": "desktop_capture",
+  },
+  {
     "command": "observability desktop-health",
     "schemaSha256": "62fcaf939d39c8d08b28cd1b59e8212152ef551d34aa41787ebfbf31817cc3ce",
     "tool": "desktop_health",
+  },
+  {
+    "command": "desktop input",
+    "schemaSha256": "cff83ee256b9f2656d2339ab2b9894ba061b04125eab6c8e978ee5d07b58c3e9",
+    "tool": "desktop_input",
+  },
+  {
+    "command": "desktop launch",
+    "schemaSha256": "6ffda31382f61e96923850ae555a3dbda089d9ac74d46356741f4af663d247b5",
+    "tool": "desktop_launch",
   },
   {
     "command": "screenshot capture",
@@ -121,6 +136,21 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "command": "screenshot save",
     "schemaSha256": "773d8ed06f742ba202088fcb0674abc1a67ea3e59adbd13a9dc6460940ccb0e6",
     "tool": "desktop_screenshot_save",
+  },
+  {
+    "command": "desktop start",
+    "schemaSha256": "c48b2d8a53e3b3622198cfef95d2236a8fb3d3fee4c9d4915587e739b5a61d34",
+    "tool": "desktop_start",
+  },
+  {
+    "command": "desktop status",
+    "schemaSha256": "622054e858797da33375607027162797a84f39277463ee8ceda92313e148d5e5",
+    "tool": "desktop_status",
+  },
+  {
+    "command": "desktop stop",
+    "schemaSha256": "356f3baff20108610b30d84a45d5e85bda188e90a9f9f6dd4957710d3ce8034a",
+    "tool": "desktop_stop",
   },
   {
     "command": "text find",

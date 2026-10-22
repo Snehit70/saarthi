@@ -1062,3 +1062,12 @@ Sends raw keys to a pane for interactive programs (REPLs, editors, pickers) or c
 ### Structured output
 
 - `sent`, `target`, `enter`
+
+## Isolated desktop commands
+
+`desktop_start`, `desktop_status`, `desktop_launch`, `desktop_input`,
+`desktop_capture` and `desktop_stop` map to `saarthi desktop <verb>`. They take an
+explicit private desktop id after creation and use a separate input lease per
+desktop. Status and capture are read-only. Private integer container ids are never
+host Hyprland window ids. The action-file schema and lifecycle contract are in
+[ISOLATED-DESKTOP.md](ISOLATED-DESKTOP.md). Command help defines CLI flags.

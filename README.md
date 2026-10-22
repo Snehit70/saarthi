@@ -1,6 +1,6 @@
 # Saarthi
 
-Saarthi is a local Hyprland desktop-automation CLI. It exposes 75 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
+Saarthi is a local Hyprland desktop-automation CLI. It exposes 81 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
 
 It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate local Firefox-family and Chromium-family browsers, and verify UI state. It intentionally does not expose arbitrary shell execution, remote transport, or an MCP server.
 
@@ -98,7 +98,7 @@ A kernel-held input lease serializes Saarthi mutations across processes. A confl
 
 ## Background work and file selection
 
-Window screenshots use `grim -T` and a native Wayland mapping helper by default. They do not focus or switch workspaces. Build the helper with a C compiler, `pkg-config`, Wayland development headers and `wayland-scanner`; `SAARTHI_REQUIRE_NATIVE=1 bun run build` makes its prerequisites mandatory. Unsupported capture fails without a foreground fallback. `--allow-focus` explicitly opts into the older focus/crop path.
+Window screenshots use `grim -T` and a native Wayland mapping helper by default. They do not focus or switch workspaces. Build the helper with a C compiler, `pkg-config`, Wayland and xkbcommon development headers and `wayland-scanner`; `SAARTHI_REQUIRE_NATIVE=1 bun run build` makes its prerequisites mandatory. Unsupported capture fails without a foreground fallback. `--allow-focus` explicitly opts into the older focus/crop path.
 
 ```bash
 saarthi screenshot capture --target window --window-id 0xABC --json
@@ -124,6 +124,18 @@ A `files` step takes explicit paths, checks regular files and a 128 MiB total li
 Prepare 4–10 steps ahead with `plan run --plan-file /private/plan.json`. The plan declares allowed session tabs and native windows, including each native window's PID and workspace. Browser changes require an immediate text checkpoint. One browser connection serves the plan, with a session-specific lease instead of the global desktop-input lease. Progress is synced before each step. A started plan id cannot be replayed, including after failure or process death. Inspect the receipt and actual application state, then prepare a new id containing only remaining work.
 
 See [the plan example and recovery instructions](docs/BACKGROUND-WORK.md). A browser tab scope does not assert which Hyprland workspace contains its window. Ordinary native keyboard/mouse actions still share your seat; a reserved workspace alone cannot isolate them.
+
+## Independent native input
+
+Use `desktop start` to create a headless desktop with its own virtual mouse,
+keyboard and session bus. Launch apps there with `desktop launch`, inspect
+`desktop status` and `desktop capture`, then execute bounded `desktop input`
+actions against exact private window ids and PIDs. `desktop stop` closes only
+verified session-owned processes. The host workspace and input seat stay separate.
+
+This requires Sway and the native input helpers. Apps use private configuration
+and browser profiles; existing host windows and logged-in browser sessions do not
+move into it. See [setup, file pickers and recovery](docs/ISOLATED-DESKTOP.md).
 
 ## Computer-use benchmark
 
@@ -182,7 +194,7 @@ The verification layers are:
 
 - adapter tests for domain behavior
 - CLI unit/dispatch tests for argv, schemas, outputs, exit codes, state, and status
-- registry snapshot coverage for all 75 commands
+- registry snapshot coverage for all 81 commands
 - built-binary smoke for generated help and every read-only `--json` command
 
 `bun run smoke:screenshot` is the optional live screenshot check and writes a real PNG.

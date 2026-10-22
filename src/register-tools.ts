@@ -5,6 +5,7 @@ import "./handlers/apps.js";
 import "./handlers/browser.js";
 import "./handlers/background-browser.js";
 import "./handlers/plans.js";
+import "./handlers/isolated-desktop.js";
 import "./handlers/tmux.js";
 import "./handlers/screenshots.js";
 import "./handlers/workspace-capture.js";

@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwayland-dev libwayland-bin pkg-config gcc
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libwayland-dev libwayland-bin libxkbcommon-dev pkg-config gcc
       - run: bun install --frozen-lockfile
       - run: bun run test
       - run: bun run build

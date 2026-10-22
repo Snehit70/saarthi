@@ -81,6 +81,7 @@ server.registerTool(
     },
   },
   async ({ command, appName, workspace, preferEmptyWorkspace, rangeStart, rangeEnd, keepCurrentWorkspace }) => {
+    if (appName === "isolated-desktop") throw new HyprlandError("APP_LAUNCH_FAILED", "Use desktop start for isolated compositors");
     const started = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (command && !policy.launch.allowCustomCommand) {
@@ -186,6 +187,7 @@ server.registerTool(
     },
   },
   async (args) => {
+    if (args.appName === "isolated-desktop") throw new HyprlandError("APP_LAUNCH_FAILED", "Use desktop start for isolated compositors");
     const started = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (args.command && !policy.launch.allowCustomCommand) {
