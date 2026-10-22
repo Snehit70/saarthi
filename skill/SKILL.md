@@ -210,3 +210,15 @@ Use these failure labels when reporting evidence: `focus_drift`, `cursor_out_of_
 ## Evidence
 
 For non-trivial tasks report the target window id, baseline screenshot path, accessibility/OCR/grid anchor used, final verification screenshot path, and whether the final action was performed or only prepared. Use `saarthi observability session-trace-export --json` and `logs/actions/run.jsonl` for diagnosis.
+
+## Semantic actions and image history
+
+Prefer `ui act --window-id ID --name EXACT --role text --action set-text --text VALUE` for verifiable replacement, and `ui read-text` for exact readback. Do not use password fields. A selector must identify one current enabled on-screen element. `ui find/tree --window-id ID` scopes traversal and translates frame-relative positions into screen coordinates.
+
+For “paste the last four images here only”, identify and focus the exact destination first. Run `clipboard images --limit 4` for metadata, then `clipboard paste-images --window-id ID --target-name EXACT --count 4`. The destination must expose a uniquely named focused editable field. The command skips text entries and never presses Enter. Inspect the resulting attachment list and count before claiming success. With inaccessible browser composers, export images and use the native file chooser, then verify attachments. Do not substitute a guessed field.
+
+The preferred original clipboard MIME is restored, including an empty selection. Other MIME representations are not preserved; history watchers may record temporary images. If a user copies new content during the operation, the command stops and keeps that new selection. Keep exported files and entered text out of public logs and PRs.
+
+For repeated semantic work, a private JSON plan passed to `ui batch --window-id ID --steps-file PATH` reduces process overhead. Maximum 20 steps; every target is re-resolved and every text write checked. On a partial failure inspect completed work before constructing a new plan. Never replay the entire batch blindly.
+
+Exit 18 means another Saarthi process owns desktop input. Wait for that operation to finish and inspect before retrying. The input lease releases on owner death; it does not protect against the user's keyboard or unrelated automation.

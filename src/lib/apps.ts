@@ -1,3 +1,5 @@
+import { projectRoot } from "./paths.js";
+import { join } from "node:path";
 import { BROWSERS } from "./browser-catalog.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -16,6 +18,11 @@ export interface AppCatalogEntry {
 }
 
 export const APP_CATALOG: AppCatalogEntry[] = [
+  {
+    name: "benchmark-fixture",
+    description: "Local GTK benchmark workspace, enabled only by explicit launch policy.",
+    commands: [`python3 ${join(projectRoot(), "benchmarks/workspace.py")}`],
+  },
   ...BROWSERS.map((browser) => ({
     name: browser.id,
     description: `${browser.id} web browser (${browser.family}).`,

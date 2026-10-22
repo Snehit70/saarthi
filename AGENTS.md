@@ -12,6 +12,7 @@
 - Do not add daemon, HTTP, remote, or MCP transport.
 - Validate all window ids against live `hyprctl -j clients` before dispatching mutating commands.
 - Route every app launch through the launch policy (`config/policy.json`); never bypass alias/deny/rate-limit checks.
-- Do not add arbitrary shell execution or clipboard access tools.
+- Clipboard access tools are allowed. Keep clipboard data out of logs and scope paste operations to an explicitly validated destination.
+- Do not add arbitrary shell execution tools.
 - Mutating commands must append audit events and emit telemetry; preserve the act-then-verify pattern.
 - Keep `execFile` with argument arrays — no shell string interpolation.

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { sanitizeTypedText } from "./input.js";
 import { HyprlandError } from "./hyprland.js";
+import { inputOwnershipSignal } from "./input-ownership.js";
 
 // stdin keeps text out of process listings and prevents wtype option parsing.
 export function typingTimeout(text: string, delayMs = 0): number {
@@ -17,16 +18,21 @@ export async function typeText(text: string, delayMs = 0): Promise<void> {
   const safeText = sanitizeTypedText(text);
   await new Promise<void>((resolve, reject) => {
     const args = delayMs > 0 ? ["-d", String(delayMs), "-"] : ["-"];
-    const child = execFile("wtype", args, { timeout, maxBuffer: 64 * 1024 }, (error) => {
-      if (error)
-        reject(
-          new HyprlandError(
-            "INPUT_FAILED",
-            "wtype failed or timed out; check the Wayland session and wtype installation",
-          ),
-        );
-      else resolve();
-    });
+    const child = execFile(
+      "wtype",
+      args,
+      { timeout, signal: inputOwnershipSignal(), maxBuffer: 64 * 1024 },
+      (error) => {
+        if (error)
+          reject(
+            new HyprlandError(
+              "INPUT_FAILED",
+              "wtype failed or timed out; check the Wayland session and wtype installation",
+            ),
+          );
+        else resolve();
+      },
+    );
     child.stdin?.on("error", () => {
       /* execFile reports process errors through its callback. */
     });

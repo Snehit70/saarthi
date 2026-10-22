@@ -16,6 +16,7 @@ export interface HyprWorkspace {
 }
 
 export interface HyprClient {
+  pid?: number;
   address: WindowId;
   class: string;
   title: string;
@@ -30,6 +31,7 @@ export interface HyprClient {
 }
 
 export interface WindowInfo {
+  pid?: number;
   id: WindowId;
   class: string;
   title: string;

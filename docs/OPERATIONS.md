@@ -190,3 +190,11 @@ Use the caller's actual `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, and D-Bus session 
 The installed wtype may reject `-d 0`; the shared adapter omits the delay flag at zero. A harmless adapter installation check is `wtype - </dev/null` in the real Wayland session. Actual text is always sent through stdin.
 
 See [the generalization review](research/2026-10-22-generalization-review.md) for source-backed decisions, live validation, and remaining gaps.
+
+## Clipboard and semantic input
+
+Check `command -v cliphist wl-copy wl-paste flock python3` in the same Wayland session. `clipboard images --limit 4 --json` returns only image metadata. `ui find --window-id ID --name-contains Composer --json` checks whether a destination is addressable. Do not infer an attachment from a successful Ctrl+V; inspect the final application state. The installed skill documents the guarded paste and native chooser fallback.
+
+Exit 18, `INPUT_BUSY`, means another Saarthi invocation holds the desktop input lease. Let that operation finish and inspect before retrying. The lease releases on owner death. Do not remove the lockfile while another invocation runs, because replacing its inode would create a second independent lock. This is coordination between Saarthi processes and does not isolate unrelated desktop input.
+
+The benchmark fixture is an optional policy-approved desktop application. It does not require a server. See [SaarthiBench](../benchmarks/README.md) for private run setup, version freezing, scoring, and the difference between scripted tooling results and agent evaluation.

@@ -68,6 +68,21 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "click_wait_retry",
   },
   {
+    "command": "clipboard export-images",
+    "schemaSha256": "69040b01420dd291e42c529cbdb0531609d5aeefead8e6ade5ee2d64ff6f3e6d",
+    "tool": "clipboard_export_images",
+  },
+  {
+    "command": "clipboard images",
+    "schemaSha256": "632253324082ea73ecd18788e06ad6831b44f1615b5315b73d156d9a307b022b",
+    "tool": "clipboard_images",
+  },
+  {
+    "command": "clipboard paste-images",
+    "schemaSha256": "2c1d8384fcb9a4ad57e0456322a48eae7a9f6e7aff2a6ceb85de564b792d9039",
+    "tool": "clipboard_paste_images",
+  },
+  {
     "command": "observability desktop-health",
     "schemaSha256": "62fcaf939d39c8d08b28cd1b59e8212152ef551d34aa41787ebfbf31817cc3ce",
     "tool": "desktop_health",
@@ -223,13 +238,28 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "type_text",
   },
   {
+    "command": "ui act",
+    "schemaSha256": "26f41f6db427b04054b769c0049644aac3e8c21852b72f612eba4b1e0c0487d9",
+    "tool": "ui_act",
+  },
+  {
+    "command": "ui batch",
+    "schemaSha256": "57f7cd77b386cd585b34db6989c0fbbf34f7cbbe012435c958d0e4b916e4e7f5",
+    "tool": "ui_batch",
+  },
+  {
     "command": "ui find",
-    "schemaSha256": "7a5f776eb773b05fc64e94a137e0fde70c44c986b9665afaba639c43aa6debe5",
+    "schemaSha256": "51dd6d837430a7b84784d289396158fdd4794c337b2a1d2f6fd6f8aae4110b5d",
     "tool": "ui_find",
   },
   {
+    "command": "ui read-text",
+    "schemaSha256": "4d20f8f7f39681292941fc8382144b9f6f5f8a4e02d0be531cde0632e0b52673",
+    "tool": "ui_read_text",
+  },
+  {
     "command": "ui tree",
-    "schemaSha256": "725d130e348e4210c2d7fd23952f84a699ccab661a622db0aa7566f7d9ca47df",
+    "schemaSha256": "58bfac7778827b8d9f073916055777abb8f4a71142e1d85b213b76fe6a17958c",
     "tool": "ui_tree",
   },
   {

@@ -12,7 +12,8 @@
       "vivaldi",
       "edge",
       "zathura",
-      "kitty"
+      "kitty",
+      "benchmark-fixture"
     ],
     "deniedExecutables": [
       "sudo",

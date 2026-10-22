@@ -26,6 +26,11 @@ server.registerTool(
         .boolean()
         .default(true)
         .describe("Restrict to interactive roles (buttons, entries, links, menu items, …)."),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Resolve coordinates relative to this live window frame."),
       focused: z
         .boolean()
         .default(true)
@@ -46,6 +51,7 @@ server.registerTool(
     annotations: READ_ONLY,
   },
   async ({
+    windowId,
     nameContains,
     role,
     interactive,
@@ -58,9 +64,10 @@ server.registerTool(
     maxVisited,
   }) => {
     // appName/pid override the implicit focused-app scope
-    const useFocused = focused && !appName && pid === undefined;
+    const useFocused = focused && !windowId && !appName && pid === undefined;
     const result = await queryAtspi({
       mode: "find",
+      windowId: windowId as `0x${string}` | undefined,
       focused: useFocused,
       pid,
       appName,
@@ -87,6 +94,11 @@ server.registerTool(
     description:
       "Dump the accessibility tree of an application (focused by default) as a flat list of elements with roles, names, depth, states, and screen coordinates. For planning/inspection.",
     inputSchema: {
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Resolve coordinates relative to this live window frame."),
       focused: z.boolean().default(true),
       appName: z.string().max(100).optional(),
       pid: z.number().int().positive().optional(),
@@ -103,10 +115,11 @@ server.registerTool(
     },
     annotations: READ_ONLY,
   },
-  async ({ focused, appName, pid, includeOffscreen, maxDepth, maxNodes, maxVisited }) => {
-    const useFocused = focused && !appName && pid === undefined;
+  async ({ windowId, focused, appName, pid, includeOffscreen, maxDepth, maxNodes, maxVisited }) => {
+    const useFocused = focused && !windowId && !appName && pid === undefined;
     const result = await queryAtspi({
       mode: "tree",
+      windowId: windowId as `0x${string}` | undefined,
       focused: useFocused,
       pid,
       appName,

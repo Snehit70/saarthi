@@ -1,12 +1,12 @@
 # Saarthi
 
-Saarthi is a local Hyprland desktop-automation CLI. It exposes 63 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
+Saarthi is a local Hyprland desktop-automation CLI. It exposes 69 commands through a discoverable `saarthi <noun> <verb>` tree without loading a large tool-schema catalog into every agent session.
 
-It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate local Firefox-family and Chromium-family browsers, and verify UI state. It intentionally does not expose arbitrary shell execution, clipboard access, remote transport, or an MCP server.
+It can inspect and control windows/workspaces, capture screenshots, launch policy-approved apps, drive keyboard/mouse input, query accessibility and OCR, operate existing tmux panes, automate local Firefox-family and Chromium-family browsers, and verify UI state. It intentionally does not expose arbitrary shell execution, remote transport, or an MCP server.
 
 ## Install
 
-Requirements: Node.js 22+, pnpm, Hyprland, and the external tools needed by the commands you use (`hyprctl`, `grim`, `wtype`, `ydotool`, `tesseract`, ImageMagick, tmux, and AT-SPI Python bindings).
+Requirements: Node.js 22+, pnpm, Hyprland, and the external tools needed by the commands you use (`hyprctl`, `grim`, `wtype`, `ydotool`, `tesseract`, ImageMagick, tmux, `flock`, `cliphist`, `wl-clipboard`, and AT-SPI Python bindings).
 
 ```bash
 pnpm install
@@ -76,6 +76,30 @@ Title readiness is a heuristic, not proof that a page has loaded. A readiness ti
 
 All input is foreground input. `input type` and `input key-press` accept `--window-id` to reject focus drift. Typing uses stdin rather than process arguments and limits estimated duration to 120 seconds. For concurrent or background tab control, see the limitations in the [review](docs/research/2026-10-22-generalization-review.md).
 
+## Semantic actions and clipboard images
+
+Resolve elements by exact accessible name in a live focused window. Text replacement verifies readback. Password reads are refused; ambiguous, stale, hidden, disabled, or mismatched targets fail closed.
+
+```bash
+saarthi ui find --window-id 0xABC --name-contains Composer --json
+saarthi ui act --window-id 0xABC --name "Target composer" --role text --action focus --json
+saarthi ui read-text --window-id 0xABC --name "Target composer" --role text --json
+saarthi clipboard images --limit 4 --json
+saarthi clipboard paste-images --window-id 0xABC --target-name "Target composer" --count 4 --json
+```
+
+`paste-images` skips text history entries, requires a uniquely named focused editable field, verifies each injected image, and sends Ctrl+V without Enter. It restores the previous preferred MIME payload, or clears the selection if it was empty. It preserves a new clipboard selection detected during the operation. Full multi-format clipboard restoration is not supported. History watchers may retain the temporary images. A successful paste command still requires checking the destination's attachment state.
+
+If the application does not expose an addressable field, use `clipboard export-images` and attach the returned private files through its native file chooser. This requires separate destination verification.
+
+`ui batch --window-id 0xABC --steps-file /private/plan.json` runs up to 20 structured semantic steps. Each target is resolved again, text writes are verified, and a failure reports how many steps completed. Inspect before retrying; completed actions are never replayed automatically. Send, submit, delete, and payment actions require confirmation flags.
+
+A kernel-held input lease serializes Saarthi mutations across processes. A conflicting invocation exits `18` before input. The lease is released when its owner dies. It does not isolate the desktop from a person typing or from other applications. AT-SPI coordinate translation now aligns the selected frame with live compositor bounds, including negative screen origins.
+
+## Computer-use benchmark
+
+[SaarthiBench](benchmarks/README.md) contains 64 native GTK workflows across clipboard, documents, data, forms, files, recovery, long sequences, and preservation. It checks saved artifacts, exact text, image order, file hashes, unrelated drafts, and accidental sends, with action and wall-time budgets. The scripted reference track measures tooling; an independent agent comparison with Codex remains to be run.
+
 ## Persistent State
 
 Cross-invocation state lives under `~/.local/state/saarthi/`:
@@ -129,7 +153,7 @@ The verification layers are:
 
 - adapter tests for domain behavior
 - CLI unit/dispatch tests for argv, schemas, outputs, exit codes, state, and status
-- registry snapshot coverage for all 63 commands
+- registry snapshot coverage for all 69 commands
 - built-binary smoke for generated help and every read-only `--json` command
 
 `pnpm smoke:screenshot` is the optional live screenshot check and writes a real PNG.

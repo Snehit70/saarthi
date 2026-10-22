@@ -66,10 +66,10 @@ The deterministic improvement is ten polls using 20 state reads plus one discove
 
 | Priority | Gap and evidence | Next bounded improvement |
 | --- | --- | --- |
-| High | Global input can race the user or another process between a focus check and the action. Workspaces do not isolate input. | Add cross-process input ownership with bounded acquisition and owner-death recovery. True background browser control needs a separate architectural decision. |
+| High | Input remains global and can race the user or unrelated software. | Cross-process Saarthi ownership is now implemented with kernel owner-death recovery. True background control remains a separate architectural decision. |
 | High | Monitor state and screenshot/pointer coordinates lack a complete logical/physical scale model. Monitor dimensions are copied directly from hyprctl. | Add scaled, rotated, negative-origin fixtures and explicit screenshot-pixel to logical-coordinate conversion before claiming multi-monitor accuracy. |
 | High | Window capture can focus a window. Restoration covers workspace switching but does not guarantee the prior active window on the same workspace. | Add explicit focus restoration with window-disappearance and concurrent user-focus tests. |
-| Medium | AT-SPI lacks semantic action invocation; browser page trees can be unavailable. | Add separately audited semantic actions with fresh resolution. Keep OCR/grid fallback and avoid stale index-only identifiers. |
+| Medium | Browser page accessibility can be unavailable. | Semantic action invocation, exact text readback, bounded batches, and scoped frame coordinates are now implemented. Keep OCR/grid fallback and broaden real-app coverage. |
 | Medium | OCR has a fixed segmentation mode and English default; phrase matches do not span lines. | Add installed-language discovery and explicit segmentation/crop options with a multilingual fixture corpus. Measure accuracy and latency together. |
 | Medium | Trace/metrics read whole JSONL files before filtering and lastN. | Stream filtered reads with bounded retained matches, preserving session/since semantics. Add retention separately. |
 | Medium | Outer polling deadlines may be exceeded by an in-progress capture/OCR operation. | Propagate remaining-time budgets without automatically replaying actions. |
@@ -78,3 +78,15 @@ The deterministic improvement is ten polls using 20 state reads plus one discove
 | Low | App launch and browser discovery have separate inventory paths; profile details remain Zen/Firefox-specific. | Consolidate inventory after adding real packaging fixtures. |
 
 The PR improves common foreground work and failure handling. It does not claim DOM control, reliable background concurrency, universal browser support, or complete multi-monitor correctness.
+
+## Benchmark-driven follow-up
+
+The user explicitly authorized clipboard tools, superseding the old repository prohibition. The PR adds image metadata, private export, and scoped paste commands using [cliphist](https://github.com/sentriz/cliphist) and [wl-clipboard](https://github.com/bugaevc/wl-clipboard). No text history previews or image bytes enter audit events. A paste requires a validated focused editable accessible field, verifies bytes, never presses Enter, and restores the preferred original MIME or an empty selection. It leaves a detected new user selection alone. Full multi-MIME restoration and history rollback remain gaps.
+
+Live GTK checks exposed window-relative accessibility extents in the Wayland session. The selected accessible frame is now aligned with the compositor's live title and dimensions, and descendant positions inherit that offset. Semantic text uses the explicit AT-SPI Text interface for exact readback. Focus requests wait for asynchronous state confirmation instead of repeating the action.
+
+A kernel-held `flock` lease serializes input across Saarthi invocations and releases when its owner dies, including SIGKILL. Tests cover concurrent refusal, nested transactions, error release, and actual owner death. This does not isolate the desktop from the user or unrelated software.
+
+[SaarthiBench v1](../../benchmarks/README.md) adds 64 controlled GTK workflows with signed saved outcomes, preservation checks, action/time budgets, and complete-denominator reporting. [OSWorld](https://github.com/xlang-ai/OSWorld) provides the stronger model of real-application execution-based evaluation. The current scripted reference is a tooling regression track; an independent autonomous Codex comparison has not been run. The [OpenAI integration recipes](https://developers.openai.com/api/docs/guides/tools-computer-use-integration) describe computer tooling integrations, not a comparable Codex product score.
+
+Pilot runs found an empty-selection failure and asynchronous focus readback. Both now have targeted handling. Repeated clipboard workflows also exposed native crashes in the benchmark GTK process. Core dumps confirmed the fixture crash; the exact underlying native cause was not established. Failed pilot traces remain local and are not combined with later runs.

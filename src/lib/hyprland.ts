@@ -3,6 +3,7 @@ import { access, constants } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { inputOwnershipSignal } from "./input-ownership.js";
 import { monitorWindowBounds, parsePngDimensions } from "./image.js";
 import type { HyprClient, MonitorInfo, WindowId, WindowInfo } from "./types.js";
 
@@ -127,6 +128,7 @@ async function dispatch(args: string[]): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync("hyprctl", ["dispatch", ...args], {
       env: await hyprlandEnvironment(),
+      signal: inputOwnershipSignal(),
       timeout: 3000,
       maxBuffer: 4 * 1024 * 1024,
     });
@@ -331,6 +333,7 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
 
 function normalizeClient(client: HyprClient, focusedId: WindowId | null): WindowInfo {
   return {
+    ...(typeof client.pid === "number" ? { pid: client.pid } : {}),
     id: client.address,
     class: client.class,
     title: client.title,

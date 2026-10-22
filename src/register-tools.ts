@@ -13,3 +13,5 @@ import "./handlers/observability.js";
 import "./handlers/observe.js";
 import "./handlers/perception.js";
 import "./handlers/composite.js";
+import "./handlers/clipboard.js";
+import "./handlers/ui-action.js";

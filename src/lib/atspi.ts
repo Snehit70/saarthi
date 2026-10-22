@@ -3,7 +3,8 @@ import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HyprlandError, hyprlandEnvironment } from "./hyprland.js";
+import { activeWindow, getWindowOrThrow, HyprlandError, hyprlandEnvironment } from "./hyprland.js";
+import type { WindowId } from "./types.js";
 import { commandExists } from "./util.js";
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +35,7 @@ export interface AtspiResult {
 }
 
 export interface AtspiQuery {
+  windowId?: WindowId;
   mode: "tree" | "find";
   focused?: boolean;
   pid?: number;
@@ -66,6 +68,13 @@ export async function queryAtspi(q: AtspiQuery): Promise<AtspiResult> {
     throw new HyprlandError("ATSPI_FAILED", "python3 is not installed");
   }
   const args = [resolveScript(), "--mode", q.mode];
+  if (q.windowId || q.focused) {
+    const window = q.windowId ? await getWindowOrThrow(q.windowId) : await activeWindow();
+    if (!window?.pid) throw new HyprlandError("ATSPI_FAILED", "Cannot resolve target window process");
+    if (q.pid && q.pid !== window.pid) throw new HyprlandError("ATSPI_FAILED", "Process does not match target window");
+    args.push("--window-json", JSON.stringify(window));
+    if (!q.pid) args.push("--pid", String(window.pid));
+  }
   if (q.focused) args.push("--focused");
   if (typeof q.pid === "number") args.push("--pid", String(q.pid));
   if (q.appName) args.push("--app-name", q.appName);
