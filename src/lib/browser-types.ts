@@ -1,3 +1,4 @@
+import type { BrowserId } from "./browser-catalog.js";
 import type { WindowInfo } from "./types.js";
 
 export const ZEN_FLATPAK_ID = "app.zen_browser.zen";
@@ -63,7 +64,15 @@ export interface ZenDeviceInfo {
 }
 
 export interface LocalBrowserDiscovery {
-  primary: "zen-flatpak";
+  primary: BrowserId | null;
+  browsers: Array<{
+    id: BrowserId;
+    family: "firefox" | "chromium";
+    installed: boolean;
+    policyAllowed: boolean;
+    launchCommand: string | null;
+    runningWindows: WindowInfo[];
+  }>;
   defaultBrowser: string | null;
   httpHandler: string | null;
   httpsHandler: string | null;
@@ -100,11 +109,13 @@ export interface BrowserReadinessResult {
 export type BrowserOpenMode = "new-tab" | "new-window" | "current-tab";
 
 export interface BrowserOpenUrlResult {
+  profile?: import("./browser-profiles.js").NativeProfile | null;
   effectiveMode: BrowserOpenMode | "new-window-fallback";
   reusableWindow: WindowInfo | null;
-  targetWindow: WindowInfo;
+  targetWindow: WindowInfo | null;
+  command: string | null;
   attempts: number;
   wasNewWindow: boolean;
   titleBefore: string | null;
-  readiness: BrowserReadinessResult;
+  readiness: BrowserReadinessResult | null;
 }

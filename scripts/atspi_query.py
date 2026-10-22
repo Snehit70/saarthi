@@ -17,7 +17,9 @@ import subprocess
 import sys
 import warnings
 
-warnings.filterwarnings("ignore")  # keep stdout pure JSON (a11y bindings warn on stderr)
+warnings.filterwarnings(
+    "ignore"
+)  # keep stdout pure JSON (a11y bindings warn on stderr)
 
 import gi
 
@@ -25,15 +27,42 @@ gi.require_version("Atspi", "2.0")
 from gi.repository import Atspi  # noqa: E402
 
 INTERACTIVE_ROLES = {
-    "push button", "toggle button", "check box", "radio button", "menu item",
-    "check menu item", "radio menu item", "link", "entry", "text", "password text",
-    "combo box", "list item", "tab", "page tab", "slider", "spin button",
-    "icon", "table cell", "tree item", "button",
+    "push button",
+    "toggle button",
+    "check box",
+    "radio button",
+    "menu item",
+    "check menu item",
+    "radio menu item",
+    "link",
+    "entry",
+    "text",
+    "password text",
+    "combo box",
+    "list item",
+    "tab",
+    "page tab",
+    "slider",
+    "spin button",
+    "icon",
+    "table cell",
+    "tree item",
+    "button",
 }
 
 USEFUL_STATES = {
-    "focused", "focusable", "sensitive", "enabled", "visible", "showing",
-    "selected", "checked", "expanded", "editable",
+    "focused",
+    "focusable",
+    "sensitive",
+    "enabled",
+    "visible",
+    "showing",
+    "selected",
+    "checked",
+    "expanded",
+    "editable",
+    "defunct",
+    "stale",
 }
 
 
@@ -42,7 +71,14 @@ def focused_pid():
         out = subprocess.run(
             ["hyprctl", "-j", "activewindow"], capture_output=True, text=True, timeout=3
         )
-        return json.loads(out.stdout).get("pid")
+        if out.returncode != 0:
+            return None
+        pid = json.loads(out.stdout).get("pid")
+        return (
+            pid
+            if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0
+            else None
+        )
     except Exception:
         return None
 
@@ -50,7 +86,11 @@ def focused_pid():
 def states_of(node):
     try:
         ss = node.get_state_set()
-        return sorted(s for s in USEFUL_STATES if ss.contains(getattr(Atspi.StateType, s.upper().replace(" ", "_"), -1)))
+        return sorted(
+            s
+            for s in USEFUL_STATES
+            if ss.contains(getattr(Atspi.StateType, s.upper().replace(" ", "_"), -1))
+        )
     except Exception:
         return []
 
@@ -60,7 +100,10 @@ def actions_of(node):
         ai = node.get_action_iface()
         if ai is None:
             return []
-        return [Atspi.Action.get_action_name(node, i) for i in range(Atspi.Action.get_n_actions(node))]
+        return [
+            Atspi.Action.get_action_name(node, i)
+            for i in range(Atspi.Action.get_n_actions(node))
+        ]
     except Exception:
         return []
 
@@ -73,37 +116,68 @@ def extents_of(node):
         return None
 
 
-def collect(app, args, out, budget):
+def collect(app, args, out, budget, visited=None):
     """Depth-first walk of one application, appending matching elements to out."""
+    if visited is None:
+        visited = [0, False]
 
-    def visit(node, depth, path):
+    def visit(node, depth, path, offset=(0, 0)):
         if budget[0] <= 0 or depth > args.max_depth:
             return
+        if visited[0] >= args.max_visited:
+            visited[1] = True
+            return
+        visited[0] += 1
         try:
             role = node.get_role_name()
             name = node.get_name() or ""
         except Exception:
             return
 
-        ext = extents_of(node)
-        onscreen = ext is not None and ext[2] > 0 and ext[3] > 0
-        match = True
-        if args.interactive and role not in INTERACTIVE_ROLES:
-            match = False
-        if args.role and role != args.role:
-            match = False
-        if args.name and args.name.lower() not in name.lower():
-            match = False
+        match = not args.interactive or role in INTERACTIVE_ROLES
+        match = match and (not args.role or role == args.role)
+        match = match and (not args.name or args.name.lower() in name.lower())
+        bounds = getattr(args, "window_bounds", None)
+        frame = bool(bounds and role in ("frame", "dialog"))
+        # Do not issue state/component RPCs for every unmatched descendant.
+        # We still traverse names/roles to detect ambiguous selectors.
+        states = states_of(node) if match or frame else []
+        if "defunct" in states or "stale" in states:
+            return
+        ext = extents_of(node) if match or frame else None
+        if frame:
+            if (
+                name != args.window_title
+                or ext is None
+                or abs(ext[2] - bounds["width"]) > 16
+                or abs(ext[3] - bounds["height"]) > 16
+            ):
+                return
+            offset = (bounds["x"] - ext[0], bounds["y"] - ext[1])
+        if ext is not None:
+            ext = (ext[0] + offset[0], ext[1] + offset[1], ext[2], ext[3])
+        onscreen = (
+            ext is not None
+            and ext[2] > 0
+            and ext[3] > 0
+            and "visible" in states
+            and "showing" in states
+        )
         if not args.include_offscreen and not onscreen:
-            if args.mode == "find":
-                match = False
+            match = False
 
         if match and not (args.mode == "find" and not name and not args.role):
             elem = {"role": role, "name": name, "depth": depth, "path": path}
             if ext:
-                elem.update(x=ext[0], y=ext[1], w=ext[2], h=ext[3],
-                            cx=ext[0] + ext[2] // 2, cy=ext[1] + ext[3] // 2)
-            elem["states"] = states_of(node)
+                elem.update(
+                    x=ext[0],
+                    y=ext[1],
+                    w=ext[2],
+                    h=ext[3],
+                    cx=ext[0] + ext[2] // 2,
+                    cy=ext[1] + ext[3] // 2,
+                )
+            elem["states"] = states
             acts = actions_of(node)
             if acts:
                 elem["actions"] = acts
@@ -115,12 +189,16 @@ def collect(app, args, out, budget):
         except Exception:
             n = 0
         for i in range(min(n, args.max_children)):
+            if budget[0] <= 0 or visited[0] >= args.max_visited:
+                if visited[0] >= args.max_visited:
+                    visited[1] = True
+                break
             try:
                 child = node.get_child_at_index(i)
             except Exception:
                 continue
             if child is not None:
-                visit(child, depth + 1, path + [i])
+                visit(child, depth + 1, path + [i], offset)
 
     visit(app, 0, [])
 
@@ -138,7 +216,17 @@ def main():
     p.add_argument("--max-depth", type=int, default=14)
     p.add_argument("--max-children", type=int, default=64)
     p.add_argument("--max-nodes", type=int, default=400)
+    p.add_argument("--max-visited", type=int, default=10000)
+    p.add_argument("--window-json")
     args = p.parse_args()
+    if args.window_json:
+        window = json.loads(args.window_json)
+        args.window_title = window["title"]
+        args.window_bounds = {
+            "x": window["position"]["x"],
+            "y": window["position"]["y"],
+            **window["size"],
+        }
 
     Atspi.init()
     desktop = Atspi.get_desktop(0)
@@ -146,10 +234,15 @@ def main():
     pid = args.pid
     if args.focused and pid is None:
         pid = focused_pid()
+        if pid is None:
+            raise RuntimeError(
+                "Cannot resolve focused application PID; specify --pid or --app-name"
+            )
 
     apps_meta = []
     elements = []
     budget = [args.max_nodes]
+    visited = [0, False]
 
     for i in range(desktop.get_child_count()):
         try:
@@ -169,19 +262,26 @@ def main():
         if args.app_name and args.app_name.lower() not in app_name.lower():
             continue
 
-        apps_meta.append({"name": app_name, "pid": app_pid, "children": app.get_child_count()})
-        collect(app, args, elements, budget)
-        if budget[0] <= 0:
+        apps_meta.append(
+            {"name": app_name, "pid": app_pid, "children": app.get_child_count()}
+        )
+        collect(app, args, elements, budget, visited)
+        if budget[0] <= 0 or visited[1]:
             break
 
-    print(json.dumps({
-        "ok": True,
-        "mode": args.mode,
-        "apps": apps_meta,
-        "elements": elements,
-        "count": len(elements),
-        "truncated": budget[0] <= 0,
-    }))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "mode": args.mode,
+                "apps": apps_meta,
+                "elements": elements,
+                "count": len(elements),
+                "truncated": budget[0] <= 0 or visited[1],
+                "visited": visited[0],
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

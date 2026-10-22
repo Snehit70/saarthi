@@ -9,18 +9,91 @@ vi.mock("../src/lib/hyprland.js", async () => {
 });
 
 const EXPECTED_TOOLS = [
-  "action_step", "action_verify_window_state", "app_launch", "app_launch_and_wait", "app_list",
-  "browser_discover", "browser_focus", "browser_open_url", "browser_space_step", "browser_vimium_hint",
-  "click_text", "click_wait_retry", "desktop_health", "desktop_screenshot", "desktop_screenshot_area",
-  "desktop_screenshot_save", "find_text_on_screen", "grid_cell_rect", "grid_cell_to_point", "grid_click",
-  "grid_hide", "grid_move", "grid_show", "key_press", "metrics_report", "mouse_click", "mouse_drag",
-  "mouse_get_position", "mouse_move", "mouse_move_to_text", "mouse_scroll", "mouse_verify_in_view",
-  "overlay_task_complete", "overlay_task_ping", "overlay_task_start", "resolve_text_point", "screenshot_compare",
-  "session_trace_export", "tmux_capture", "tmux_list", "tmux_run_command", "tmux_send_keys", "type_text",
-  "ui_find", "ui_tree", "wait_for_stable", "wait_for_text", "window_find", "window_focus",
-  "window_focus_and_type", "window_focus_best", "window_get", "window_list", "window_move", "window_resize",
-  "window_send_to_workspace", "window_wait_for", "workspace_focus", "workspace_focus_relative", "workspace_list",
-  "workspace_pick_empty", "workspace_topology",
+  "action_step",
+  "file_find",
+  "knowledge_lookup",
+  "knowledge_remember",
+  "action_verify_window_state",
+  "app_launch",
+  "app_launch_and_wait",
+  "app_list",
+  "browser_action",
+  "browser_background_open",
+  "browser_background_tabs",
+  "browser_background_act",
+  "browser_background_finish",
+  "desktop_start",
+  "desktop_status",
+  "desktop_launch",
+  "desktop_input",
+  "desktop_capture",
+  "desktop_stop",
+  "plan_run",
+  "screenshot_workspace",
+  "browser_discover",
+  "browser_profiles",
+  "browser_focus",
+  "browser_open_url",
+  "browser_space_step",
+  "browser_vimium_hint",
+  "clipboard_images",
+  "clipboard_export_images",
+  "clipboard_paste_images",
+  "ui_act",
+  "ui_read_text",
+  "ui_batch",
+  "click_text",
+  "click_wait_retry",
+  "desktop_health",
+  "desktop_screenshot",
+  "desktop_screenshot_area",
+  "desktop_screenshot_save",
+  "find_text_on_screen",
+  "grid_cell_rect",
+  "grid_cell_to_point",
+  "grid_click",
+  "grid_hide",
+  "grid_move",
+  "grid_show",
+  "key_press",
+  "metrics_report",
+  "mouse_click",
+  "mouse_drag",
+  "mouse_get_position",
+  "mouse_move",
+  "mouse_move_to_text",
+  "mouse_scroll",
+  "mouse_verify_in_view",
+  "overlay_task_complete",
+  "overlay_task_ping",
+  "overlay_task_start",
+  "resolve_text_point",
+  "screenshot_compare",
+  "session_trace_export",
+  "tmux_capture",
+  "tmux_list",
+  "tmux_run_command",
+  "tmux_send_keys",
+  "type_text",
+  "ui_find",
+  "ui_tree",
+  "wait_for_stable",
+  "wait_for_text",
+  "window_find",
+  "window_focus",
+  "window_focus_and_type",
+  "window_focus_best",
+  "window_get",
+  "window_list",
+  "window_move",
+  "window_resize",
+  "window_send_to_workspace",
+  "window_wait_for",
+  "workspace_focus",
+  "workspace_focus_relative",
+  "workspace_list",
+  "workspace_pick_empty",
+  "workspace_topology",
 ].sort();
 
 describe("CLI registry contract", () => {
@@ -48,31 +121,50 @@ describe("CLI registry contract", () => {
       while (current._def.innerType || current._def.schema) current = current._def.innerType ?? current._def.schema;
       return current;
     };
-    const signature = registry.list().sort((a, b) => a.name.localeCompare(b.name)).map((tool) => {
-      const schema = {
-        command: `${tool.noun} ${tool.verb}`,
-        readOnly: tool.config.annotations?.readOnlyHint === true,
-        fields: Object.fromEntries(Object.entries(tool.config.inputSchema).map(([field, schema]) => {
-          const base = unwrap(schema);
-          const defaultResult = schema.safeParse(undefined);
-          return [field, {
-            type: base._def.typeName,
-            optionalOrDefaulted: defaultResult.success,
-            defaultValue: defaultResult.success ? defaultResult.data : undefined,
-            enumValues: base._def.values,
-            checks: base._def.checks?.map((check: Record<string, unknown>) => ({
-              ...check,
-              regex: check.regex instanceof RegExp ? check.regex.toString() : check.regex,
-            })),
-          }];
-        })),
-      };
-      return {
-        tool: tool.name,
-        command: schema.command,
-        schemaSha256: createHash("sha256").update(JSON.stringify(schema)).digest("hex"),
-      };
-    });
+    const signature = registry
+      .list()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((tool) => {
+        const schema = {
+          command: `${tool.noun} ${tool.verb}`,
+          readOnly: tool.config.annotations?.readOnlyHint === true,
+          fields: Object.fromEntries(
+            Object.entries(tool.config.inputSchema).map(([field, schema]) => {
+              const base = unwrap(schema);
+              const defaultResult = schema.safeParse(undefined);
+              return [
+                field,
+                {
+                  type: base._def.typeName,
+                  optionalOrDefaulted: defaultResult.success,
+                  defaultValue: defaultResult.success ? defaultResult.data : undefined,
+                  enumValues: base._def.values,
+                  checks: base._def.checks?.map((check: Record<string, unknown>) => ({
+                    ...check,
+                    regex: check.regex instanceof RegExp ? check.regex.toString() : check.regex,
+                  })),
+                },
+              ];
+            }),
+          ),
+        };
+        return {
+          tool: tool.name,
+          command: schema.command,
+          schemaSha256: createHash("sha256").update(JSON.stringify(schema)).digest("hex"),
+        };
+      });
     expect(signature).toMatchSnapshot();
+  });
+
+  it("rejects launch-rule injection and numeric workspaces outside policy", async () => {
+    const { registry } = await import("../src/registry.js");
+    for (const verb of ["launch", "launch-and-wait"]) {
+      const schema = registry.get("app", verb)!.config.inputSchema.workspace;
+      expect(schema.safeParse("4").success).toBe(true);
+      expect(schema.safeParse("name:research").success).toBe(true);
+      for (const value of ["99", "0", "4] exec bad", "4 silent", "special:x;exec"])
+        expect(schema.safeParse(value).success).toBe(false);
+    }
   });
 });

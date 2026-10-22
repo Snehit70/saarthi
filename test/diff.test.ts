@@ -19,8 +19,10 @@ const cp = vi.hoisted(() => {
   return { impl, execFile };
 });
 vi.mock("node:child_process", () => ({ execFile: cp.execFile }));
+vi.mock("../src/lib/util.js", () => ({ commandExists: vi.fn(async () => true) }));
 
 import { comparePngFiles } from "../src/lib/diff.js";
+import { commandExists } from "../src/lib/util.js";
 
 function magickError(stderr: string): Error {
   const e = new Error("magick differ") as Error & { stderr: string };
@@ -38,7 +40,10 @@ function withMagick(magick: () => any): void {
   });
 }
 
-beforeEach(() => cp.impl.mockReset());
+beforeEach(() => {
+  cp.impl.mockReset();
+  vi.mocked(commandExists).mockResolvedValue(true);
+});
 
 describe("comparePngFiles", () => {
   it("parses normalised RMSE when images differ (magick exits 1)", async () => {
@@ -67,10 +72,12 @@ describe("comparePngFiles", () => {
   });
 
   it("throws when ImageMagick is unavailable", async () => {
-    cp.impl.mockImplementation((cmd: string) => {
-      if (cmd === "which") throw new Error("not found");
-      return { stdout: "", stderr: "" };
-    });
+    vi.mocked(commandExists).mockResolvedValue(false);
     await expect(comparePngFiles("a.png", "b.png")).rejects.toThrow(/ImageMagick/);
+  });
+
+  it("rejects empty or malformed metrics instead of reporting a change", async () => {
+    withMagick(() => ({ stderr: "" }));
+    await expect(comparePngFiles("a.png", "b.png")).rejects.toThrow(/invalid metric/);
   });
 });

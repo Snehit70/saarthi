@@ -1,0 +1,84 @@
+{
+  "status": "incomplete-pilot-not-a-final-candidate-score",
+  "date": "2026-10-22",
+  "seed": 50821,
+  "evaluatedSourceCommit": "a53e14956e242e57b3becb905329c32d94a9fd1f",
+  "evaluatedSourceDirty": true,
+  "report": {
+    "controller": "scripted-reference",
+    "track": "scripted-reference",
+    "catalogSha256": "ce9fc83e79fc4a2291b03ecc1cf777c8cad008ef2bdf0e0954613ee984547417",
+    "sourceSha256": "60dd53090308dce51d9fb8fbd62ecc8a1ba6d24e944570030d10116cc24d79c3",
+    "total": 64,
+    "passed": 50,
+    "failed": 4,
+    "unrun": 10,
+    "completionPercent": 78.12,
+    "wallElapsedSeconds": 533.92,
+    "weightedScore": 78.1,
+    "preservationPercent": 92.59,
+    "actions": 1170,
+    "activeToolSeconds": 525.99,
+    "toolErrors": 3,
+    "bySplit": {
+      "development": {
+        "total": 48,
+        "passed": 38
+      },
+      "holdout": {
+        "total": 16,
+        "passed": 12
+      }
+    },
+    "limitation": "Scripted-reference results measure the tool stack and fixture workflows, not autonomous planning or Codex product performance."
+  },
+  "byDomain": {
+    "clipboard": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    },
+    "data": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    },
+    "documents": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    },
+    "files": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    },
+    "forms": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    },
+    "long-horizon": {
+      "passed": 2,
+      "failed": 4,
+      "unrun": 2
+    },
+    "preservation": {
+      "passed": 0,
+      "failed": 0,
+      "unrun": 8
+    },
+    "recovery": {
+      "passed": 8,
+      "failed": 0,
+      "unrun": 0
+    }
+  },
+  "failures": {
+    "long-horizon-thirty-records": "No saved workflow artifact",
+    "long-horizon-mixed-unicode": "No saved workflow artifact",
+    "long-horizon-large-bodies": "No saved workflow artifact",
+    "long-horizon-edit-and-attach": "No saved workflow artifact"
+  },
+  "followUp": "Task identity, record advancement, and observed save verification added after this run. Fixture lifecycle diagnostics added. Full fresh-candidate rerun pending an idle desktop. No Codex comparison performed."
+}

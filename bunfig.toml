@@ -1,0 +1,3 @@
+[install]
+# Preserve the seven-day dependency age policy from the previous setup.
+minimumReleaseAge = 604800

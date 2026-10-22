@@ -16,23 +16,58 @@ server.registerTool(
     description:
       "Find on-screen UI elements from the accessibility tree (roles, names, screen coordinates). Returns clickable centers (cx,cy) for mouse_click target:'full'. More reliable than OCR where apps expose accessibility.",
     inputSchema: {
-      nameContains: z.string().max(200).optional().describe("Case-insensitive substring match on the element's accessible name."),
+      nameContains: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("Case-insensitive substring match on the element's accessible name."),
       role: z.string().max(40).optional().describe("Exact AT-SPI role, e.g. 'push button', 'entry', 'link'."),
-      interactive: z.boolean().default(true).describe("Restrict to interactive roles (buttons, entries, links, menu items, …)."),
-      focused: z.boolean().default(true).describe("Limit to the focused application (resolved via the active window's pid)."),
+      interactive: z
+        .boolean()
+        .default(true)
+        .describe("Restrict to interactive roles (buttons, entries, links, menu items, …)."),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Resolve coordinates relative to this live window frame."),
+      focused: z
+        .boolean()
+        .default(true)
+        .describe("Limit to the focused application (resolved via the active window's pid)."),
       appName: z.string().max(100).optional().describe("Limit to applications whose name contains this string."),
       pid: z.number().int().positive().optional().describe("Limit to a specific application process id."),
       includeOffscreen: z.boolean().default(false),
+      maxVisited: z
+        .number()
+        .int()
+        .min(1)
+        .max(50000)
+        .default(10000)
+        .describe("Bound tree traversal even when few elements match."),
       maxDepth: z.number().int().min(1).max(40).default(16),
       maxNodes: z.number().int().min(1).max(2000).default(300),
     },
     annotations: READ_ONLY,
   },
-  async ({ nameContains, role, interactive, focused, appName, pid, includeOffscreen, maxDepth, maxNodes }) => {
+  async ({
+    windowId,
+    nameContains,
+    role,
+    interactive,
+    focused,
+    appName,
+    pid,
+    includeOffscreen,
+    maxDepth,
+    maxNodes,
+    maxVisited,
+  }) => {
     // appName/pid override the implicit focused-app scope
-    const useFocused = focused && !appName && pid === undefined;
+    const useFocused = focused && !windowId && !appName && pid === undefined;
     const result = await queryAtspi({
       mode: "find",
+      windowId: windowId as `0x${string}` | undefined,
       focused: useFocused,
       pid,
       appName,
@@ -42,6 +77,7 @@ server.registerTool(
       includeOffscreen,
       maxDepth,
       maxNodes,
+      maxVisited,
     });
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -58,25 +94,39 @@ server.registerTool(
     description:
       "Dump the accessibility tree of an application (focused by default) as a flat list of elements with roles, names, depth, states, and screen coordinates. For planning/inspection.",
     inputSchema: {
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Resolve coordinates relative to this live window frame."),
       focused: z.boolean().default(true),
       appName: z.string().max(100).optional(),
       pid: z.number().int().positive().optional(),
       includeOffscreen: z.boolean().default(true),
+      maxVisited: z
+        .number()
+        .int()
+        .min(1)
+        .max(50000)
+        .default(10000)
+        .describe("Bound tree traversal even when few elements match."),
       maxDepth: z.number().int().min(1).max(40).default(18),
       maxNodes: z.number().int().min(1).max(2000).default(500),
     },
     annotations: READ_ONLY,
   },
-  async ({ focused, appName, pid, includeOffscreen, maxDepth, maxNodes }) => {
-    const useFocused = focused && !appName && pid === undefined;
+  async ({ windowId, focused, appName, pid, includeOffscreen, maxDepth, maxNodes, maxVisited }) => {
+    const useFocused = focused && !windowId && !appName && pid === undefined;
     const result = await queryAtspi({
       mode: "tree",
+      windowId: windowId as `0x${string}` | undefined,
       focused: useFocused,
       pid,
       appName,
       includeOffscreen,
       maxDepth,
       maxNodes,
+      maxVisited,
     });
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

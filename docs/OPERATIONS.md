@@ -5,14 +5,14 @@
 Check that no development process is already running before starting one. The normal CLI does not need a server process.
 
 ```bash
-pnpm install
-pnpm build
-npm link
+bun install
+bun run build
+bun link
 command -v saarthi
 saarthi --help
 ```
 
-After source changes, run `pnpm build`. The npm-linked command points at `dist/src/cli.js`, so no service or client reconnect is required.
+After source changes, run `bun run build`. The linked command points at `dist/src/cli.js`, so no service or client reconnect is required.
 
 ## Overlay Service
 
@@ -55,9 +55,9 @@ Use `error` or `timeout` when appropriate. Inspect current state at `~/.local/st
 ## Verification
 
 ```bash
-pnpm test
-pnpm build
-pnpm smoke
+bun run test
+bun run build
+bun run smoke
 ```
 
 Optional live checks:
@@ -65,10 +65,10 @@ Optional live checks:
 ```bash
 saarthi observability desktop-health --json | jq .
 saarthi window list --json | jq '.windows | length'
-pnpm smoke:screenshot
+bun run smoke:screenshot
 ```
 
-`pnpm smoke:screenshot` performs a real capture. Read/view the returned path and remove the generated test image when no longer needed.
+`bun run smoke:screenshot` performs a real capture. Read/view the returned path and remove the generated test image when no longer needed.
 
 Dry-run mutations with:
 
@@ -171,3 +171,52 @@ journalctl --user -u saarthi-overlay.service -n 100 --no-pager
 ### tmux refusal
 
 Use `saarthi tmux list --json` to resolve targets. Do not override `TMUX_PANE_BUSY` without user confirmation.
+
+## Browser and input checks
+
+```bash
+saarthi browser discover --json
+saarthi browser open-url https://example.com --browser helium --mode new-window --readiness title-contains --ready-title-contains "Example Domain" --json
+# Use the returned live window id for the following commands.
+saarthi screenshot capture --target window --window-id 0xABC --json
+saarthi browser action --window-id 0xABC --action find --query "documentation" --json
+saarthi input key-press --window-id 0xABC --key escape --json
+```
+
+Inspect the returned screenshot before choosing an OCR query. Page content can differ from its window title. A readiness timeout exits 17, and a missing target exits 11. Inspect before retrying navigation or any action that may already have happened.
+
+Host commands use the caller's actual `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, and D-Bus session environment for input, capture, and AT-SPI. Saarthi discovers the Hyprland signature for compositor reads and passes it to focused AT-SPI lookup. Host adapters do not guess a Wayland display or start a new session. The explicitly requested `desktop start` backend creates its own session as documented below. Empty page accessibility results require OCR/grid or screenshot targeting.
+
+The installed wtype may reject `-d 0`; the shared adapter omits the delay flag at zero. A harmless adapter installation check is `wtype - </dev/null` in the real Wayland session. Actual text is always sent through stdin.
+
+See [the generalization review](research/2026-10-22-generalization-review.md) for source-backed decisions, live validation, and remaining gaps.
+
+## Clipboard and semantic input
+
+Check `command -v cliphist wl-copy wl-paste flock python3` in the same Wayland session. `clipboard images --limit 4 --json` returns only image metadata. `ui find --window-id ID --name-contains Composer --json` checks whether a destination is addressable. Do not infer an attachment from a successful Ctrl+V; inspect the final application state. The installed skill documents the guarded paste and native chooser fallback.
+
+Exit 18, `INPUT_BUSY`, means another Saarthi invocation holds the desktop input lease. Let that operation finish and inspect before retrying. The lease releases on owner death. Do not remove the lockfile while another invocation runs, because replacing its inode would create a second independent lock. This is coordination between Saarthi processes and does not isolate unrelated desktop input.
+
+The benchmark fixture is an optional policy-approved desktop application. It does not require a server. See [SaarthiBench](../benchmarks/README.md) for private run setup, version freezing, scoring, and the difference between scripted tooling results and agent evaluation.
+
+## Background capture and plans
+
+See [BACKGROUND-WORK.md](BACKGROUND-WORK.md) for the private plan schema, file-input workflow and failure recovery. Build the native helper with `bun run build:native`. Its build is optional when prerequisites are missing, but scanner/compiler errors fail once prerequisites exist. CI requires it.
+
+The browser adapter requires an existing connected Open Browser Use profile. A missing or ambiguous connection fails without launching anything. Browser session leases are separate from the desktop input lease and conflicts also exit 18. Never delete a live lease file. Plan receipts in `~/.local/state/saarthi/plans/` refuse duplicate ids, including after partial failure. Inspect an error's completedSteps and inFlightStep before writing a new plan. A timeout does not establish that an action had no effect.
+
+## Private desktop input
+
+See [ISOLATED-DESKTOP.md](ISOLATED-DESKTOP.md) for dependencies, action files, native
+file pickers, profiles and recovery. `desktop start` explicitly creates a separate
+headless display; normal host commands still use the caller's actual session.
+Inspect existing desktop ids before starting more. Use `desktop status` and view
+`desktop capture` without switching host workspaces. Always save requested work
+before `desktop stop` closes session-owned applications.
+
+A startup error names the private compositor log. Inspect that desktop's `bus.log`
+and `input-devices.log` if dialogs or devices fail. A retained keyboard failure
+requires stopping and recreating the session; never redirect it to the host.
+Private portal behavior depends on installed desktop backends. A launch timeout
+can leave an app still starting: inspect status before trying again. Private
+profiles and logs remain in the runtime after stop; stop only terminates processes.

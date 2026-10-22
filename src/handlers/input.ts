@@ -1,11 +1,8 @@
 import { z } from "zod";
-import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { audit } from "../lib/audit.js";
 import { focusWindow, getWindowOrThrow, HyprlandError, sendShortcut } from "../lib/hyprland.js";
 import type { WindowId } from "../lib/types.js";
-import { commandExists, sleep } from "../lib/util.js";
+import { sleep } from "../lib/util.js";
 import {
   normalizeKey,
   normalizeModifiers,
@@ -16,7 +13,8 @@ import {
 import { server } from "../registry.js";
 import { dryRun } from "../runtime.js";
 
-const execFileAsync = promisify(execFile);
+import { typeText, typingTimeout } from "../lib/typing.js";
+import { assertWindowFocus } from "../lib/hyprland.js";
 
 server.registerTool(
   "type_text",
@@ -25,8 +23,16 @@ server.registerTool(
     description: "Type text into the currently focused input field.",
     inputSchema: {
       text: z.string().min(1).max(4000),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Reject input if this window is no longer focused."),
       delayMs: z.number().int().min(0).max(1000).default(0),
-      sensitive: z.boolean().default(false).describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
+      sensitive: z
+        .boolean()
+        .default(false)
+        .describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
     },
     annotations: {
       readOnlyHint: false,
@@ -35,9 +41,9 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ text, delayMs }) => {
+  async ({ text, delayMs, windowId }) => {
     const safeText = sanitizeTypedText(text);
-    await audit("type_text", { textLength: safeText.length, delayMs }, dryRun);
+    await audit("type_text", { textLength: safeText.length, delayMs, windowId }, dryRun);
 
     if (dryRun) {
       return {
@@ -46,15 +52,8 @@ server.registerTool(
       };
     }
 
-    if (!(await commandExists("wtype"))) {
-      throw new HyprlandError("INPUT_FAILED", "wtype is not installed");
-    }
-
-    if (delayMs > 0) {
-      await execFileAsync("wtype", ["-d", String(delayMs), safeText]);
-    } else {
-      await execFileAsync("wtype", [safeText]);
-    }
+    if (windowId) await assertWindowFocus(windowId as WindowId);
+    await typeText(safeText, delayMs);
 
     return {
       content: [{ type: "text", text: JSON.stringify({ typed: true, textLength: safeText.length, delayMs }, null, 2) }],
@@ -73,7 +72,10 @@ server.registerTool(
       text: z.string().min(1).max(4000),
       focusSettleMs: z.number().int().min(0).max(3000).default(120),
       delayMs: z.number().int().min(0).max(1000).default(0),
-      sensitive: z.boolean().default(false).describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
+      sensitive: z
+        .boolean()
+        .default(false)
+        .describe("Mask the typed text in the status overlay/feed (e.g. passwords)."),
     },
     annotations: {
       readOnlyHint: false,
@@ -84,6 +86,7 @@ server.registerTool(
   },
   async ({ windowId, text, focusSettleMs, delayMs }) => {
     const safeText = sanitizeTypedText(text);
+    typingTimeout(safeText, delayMs);
     await getWindowOrThrow(windowId as WindowId);
     await audit("window_focus_and_type", { windowId, textLength: safeText.length, focusSettleMs, delayMs }, dryRun);
 
@@ -94,21 +97,15 @@ server.registerTool(
       };
     }
 
-    if (!(await commandExists("wtype"))) {
-      throw new HyprlandError("INPUT_FAILED", "wtype is not installed");
-    }
-
     await focusWindow(windowId as WindowId);
     if (focusSettleMs > 0) await sleep(focusSettleMs);
-
-    if (delayMs > 0) {
-      await execFileAsync("wtype", ["-d", String(delayMs), safeText]);
-    } else {
-      await execFileAsync("wtype", [safeText]);
-    }
+    await assertWindowFocus(windowId as WindowId);
+    await typeText(safeText, delayMs);
 
     return {
-      content: [{ type: "text", text: JSON.stringify({ typed: true, windowId, textLength: safeText.length }, null, 2) }],
+      content: [
+        { type: "text", text: JSON.stringify({ typed: true, windowId, textLength: safeText.length }, null, 2) },
+      ],
       structuredContent: { typed: true, windowId, textLength: safeText.length },
     };
   },
@@ -121,6 +118,11 @@ server.registerTool(
     description: "Send a single keyboard key with optional modifiers to the focused window.",
     inputSchema: {
       key: z.string().min(1).max(32),
+      windowId: z
+        .string()
+        .regex(/^0x[0-9a-fA-F]+$/)
+        .optional()
+        .describe("Reject each keypress if this window is no longer focused."),
       modifiers: z.array(z.string().min(1).max(16)).max(4).default([]),
       repeat: z.number().int().min(1).max(20).default(1),
       delayMs: z.number().int().min(0).max(2000).default(80),
@@ -132,24 +134,32 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ key, modifiers, repeat, delayMs }) => {
+  async ({ key, modifiers, repeat, delayMs, windowId }) => {
     const safeKey = normalizeKey(key);
     const safeMods = normalizeModifiers(modifiers);
-    await audit("key_press", { key: safeKey, modifiers: safeMods, repeat, delayMs }, dryRun);
+    await audit("key_press", { key: safeKey, modifiers: safeMods, repeat, delayMs, windowId }, dryRun);
     if (dryRun) {
       return {
-        content: [{ type: "text", text: `DRY_RUN key_press key=${safeKey} modifiers=${safeMods.join("+")} repeat=${repeat}` }],
+        content: [
+          { type: "text", text: `DRY_RUN key_press key=${safeKey} modifiers=${safeMods.join("+")} repeat=${repeat}` },
+        ],
         structuredContent: { dryRun: true, key: safeKey, modifiers: safeMods, repeat, delayMs },
       };
     }
     const shortcutMods = toHyprShortcutMods(safeMods);
     const shortcutKey = toHyprShortcutKey(safeKey);
     for (let i = 0; i < repeat; i += 1) {
+      if (windowId) await assertWindowFocus(windowId as WindowId);
       await sendShortcut(shortcutMods, shortcutKey);
       if (i < repeat - 1 && delayMs > 0) await sleep(delayMs);
     }
     return {
-      content: [{ type: "text", text: JSON.stringify({ sent: true, key: safeKey, modifiers: safeMods, repeat, delayMs }, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ sent: true, key: safeKey, modifiers: safeMods, repeat, delayMs }, null, 2),
+        },
+      ],
       structuredContent: { sent: true, key: safeKey, modifiers: safeMods, repeat, delayMs },
     };
   },

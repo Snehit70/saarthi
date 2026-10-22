@@ -3,8 +3,12 @@ import "./handlers/windows.js";
 import "./handlers/workspaces.js";
 import "./handlers/apps.js";
 import "./handlers/browser.js";
+import "./handlers/background-browser.js";
+import "./handlers/plans.js";
+import "./handlers/isolated-desktop.js";
 import "./handlers/tmux.js";
 import "./handlers/screenshots.js";
+import "./handlers/workspace-capture.js";
 import "./handlers/input.js";
 import "./handlers/mouse.js";
 import "./handlers/grid.js";
@@ -13,3 +17,11 @@ import "./handlers/observability.js";
 import "./handlers/observe.js";
 import "./handlers/perception.js";
 import "./handlers/composite.js";
+import "./handlers/clipboard.js";
+import "./handlers/ui-action.js";
+
+import "./handlers/files.js";
+
+import "./handlers/browser-profiles.js";
+
+import "./handlers/knowledge.js";

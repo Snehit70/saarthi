@@ -1,9 +1,11 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HyprlandError } from "./hyprland.js";
+import { activeWindow, getWindowOrThrow, HyprlandError, hyprlandEnvironment } from "./hyprland.js";
+import type { WindowId } from "./types.js";
 import { commandExists } from "./util.js";
 
 const execFileAsync = promisify(execFile);
@@ -30,9 +32,11 @@ export interface AtspiResult {
   elements: UiElement[];
   count: number;
   truncated: boolean;
+  visited?: number;
 }
 
 export interface AtspiQuery {
+  windowId?: WindowId;
   mode: "tree" | "find";
   focused?: boolean;
   pid?: number;
@@ -43,6 +47,7 @@ export interface AtspiQuery {
   includeOffscreen?: boolean;
   maxDepth: number;
   maxNodes: number;
+  maxVisited?: number;
 }
 
 function resolveScript(): string {
@@ -64,6 +69,13 @@ export async function queryAtspi(q: AtspiQuery): Promise<AtspiResult> {
     throw new HyprlandError("ATSPI_FAILED", "python3 is not installed");
   }
   const args = [resolveScript(), "--mode", q.mode];
+  if (q.windowId || q.focused) {
+    const window = q.windowId ? await getWindowOrThrow(q.windowId) : await activeWindow();
+    if (!window?.pid) throw new HyprlandError("ATSPI_FAILED", "Cannot resolve target window process");
+    if (q.pid && q.pid !== window.pid) throw new HyprlandError("ATSPI_FAILED", "Process does not match target window");
+    args.push("--window-json", JSON.stringify(window));
+    if (!q.pid) args.push("--pid", String(window.pid));
+  }
   if (q.focused) args.push("--focused");
   if (typeof q.pid === "number") args.push("--pid", String(q.pid));
   if (q.appName) args.push("--app-name", q.appName);
@@ -72,10 +84,12 @@ export async function queryAtspi(q: AtspiQuery): Promise<AtspiResult> {
   if (q.interactive) args.push("--interactive");
   if (q.includeOffscreen) args.push("--include-offscreen");
   args.push("--max-depth", String(q.maxDepth), "--max-nodes", String(q.maxNodes));
+  if (q.maxVisited !== undefined) args.push("--max-visited", String(q.maxVisited));
 
   let stdout: string;
   try {
-    const res = await execFileAsync("python3", args, { timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
+    const env = await desktopEnvironment();
+    const res = await execFileAsync("python3", args, { env, timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
     stdout = String(res.stdout);
   } catch (error) {
     const e = error as { stdout?: unknown; stderr?: unknown; killed?: boolean };

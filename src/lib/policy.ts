@@ -1,3 +1,4 @@
+import { BROWSER_IDS } from "./browser-catalog.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HyprlandError } from "./hyprland.js";
@@ -25,7 +26,7 @@ export interface PolicyConfig {
 
 const DEFAULT_POLICY: PolicyConfig = {
   launch: {
-    allowedAppAliases: ["zen", "firefox", "zathura", "kitty"],
+    allowedAppAliases: [...BROWSER_IDS, "zathura", "kitty"],
     deniedExecutables: ["sudo", "pkexec", "doas", "su"],
     deniedSubstrings: ["&&", "||", ";", "|", "`", "$(", ">", "<"],
     maxCommandLength: 240,

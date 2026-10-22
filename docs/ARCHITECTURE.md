@@ -2,7 +2,7 @@
 
 ## Runtime Model
 
-Saarthi is an installed Node.js CLI for one local Hyprland user session. Each `saarthi <noun> <verb>` invocation is a fresh process. There is no daemon, MCP transport, HTTP endpoint, remote bridge, arbitrary shell tool, or clipboard tool.
+Saarthi is an installed Node.js CLI for one local Hyprland user session. Each `saarthi <noun> <verb>` invocation is a fresh process. Saarthi exposes no daemon, MCP transport, HTTP endpoint, remote bridge, or arbitrary shell tool. Its optional browser adapter is a client of an existing local Open Browser Use socket.
 
 The independent eyes HUD remains a user systemd service and reads `~/.local/state/saarthi/status.json`.
 
@@ -30,7 +30,7 @@ Generated root, noun, and command help comes from this registry and its zod shap
 - `src/cli/execute.ts`: help, argv parsing, zod validation, dispatch, output, and exit mapping.
 - `src/registry.ts`: command registration and noun/verb mapping.
 - `src/register-tools.ts`: explicit registration imports for all handler domains.
-- `src/handlers/*`: 62 command handlers grouped by domain.
+- `src/handlers/*`: 81 command handlers grouped by domain.
 - `src/lib/*`: Hyprland, screenshot, input, OCR, accessibility, browser, tmux, policy, state, audit, and telemetry adapters.
 - `scripts/cli-smoke.ts`: built-binary command/help smoke harness.
 
@@ -64,5 +64,57 @@ Validation failures exit `2`. Hyprland, screenshot, input, OCR, app-launch, acti
 - Pure adapter tests verify domain behavior without coupling to CLI internals.
 - CLI tests exercise public argv, stdout/stderr, JSON, help, coercion, positional arguments, and exit codes.
 - State/status tests use real temporary files and independent limiter instances.
-- `test/registry-contract.test.ts` snapshots all 62 registry keys and rejects command collisions.
+- `test/registry-contract.test.ts` snapshots all 81 registry keys and rejects command collisions.
 - `scripts/cli-smoke.ts` drives the built binary, checks help for every command, and invokes every read-only command with `--json` against deterministic system-boundary fixtures.
+
+## Browser and perception adapters
+
+`browser-catalog.ts` defines known browser classes, desktop ids, and launcher candidates. `browser-control.ts` owns target resolution, policy-approved launch, focus checks, and readiness. `browser-zen.ts` retains compatibility exports and Zen shortcut conversion; Zen workspace stepping remains browser-specific.
+
+Socket discovery is shared by a single promise within each CLI invocation. Polls always fetch fresh compositor state. A failed read invalidates discovery for the next call, and mutations are never replayed automatically. Hyprland subprocesses have 3-second timeouts and 4 MiB output limits. Executable discovery searches PATH with filesystem checks instead of spawning `which`.
+
+Foreground typing shares one stdin-based `wtype` adapter across input, browser, and composite commands. Window capture defaults to a native toplevel identifier resolved from the full 64-bit Hyprland address. It never focuses as a fallback. Only an explicit allowFocus request uses the legacy workspace-restoration scope. Screenshot, OCR, and image-comparison subprocesses have 10-second timeouts. These are per-operation limits; outer polling deadlines do not preempt an in-progress subprocess.
+
+AT-SPI queries require both visible and showing states for on-screen results, reject defunct/stale nodes, and bound visited nodes independently of matched results. Failed focused-app PID resolution is an error. Phrase OCR joins only adjacent words on the same Tesseract line, applies the minimum word confidence, and validates geometry before returning click targets.
+
+## Semantic input and clipboard
+
+`ui act`, `ui read-text`, and bounded `ui batch` resolve exact elements through a live window PID and matched accessible frame. GTK Wayland frame-relative extents are translated to compositor coordinates. Each step checks current focus and accessibility states. Text enters the Python helper over stdin and is verified with the explicit AT-SPI Text interface. Batch errors include the completed count and do not replay work.
+
+`clipboard images` returns metadata only. Exports use private directories and verified image signatures. Scoped pastes require a focused editable element, compare clipboard hashes before input, and restore one preferred original MIME payload or an empty selection. A detected external copy takes precedence over restoration. Full MIME-offer preservation and clipboard-history rollback are outside this implementation.
+
+The CLI wraps mutating dispatch in an advisory kernel `flock` lease held by a child whose stdin belongs to the invoking process. Closing that pipe, including parent death, releases the lease. Conflicts return `INPUT_BUSY`, exit 18. Nested actions inherit ownership. Supported input subprocesses receive the lease abort signal. This serializes Saarthi processes, not all desktop participants.
+
+## Background execution
+
+`native/toplevels.c` binds the foreign toplevel list and Hyprland mapping protocols, returns bounded identifier/address pairs and has no focus/input API. `toplevel-capture.ts` validates the live PID/class before and after bounded `grim -T` capture. Workspace capture adds workspace checks around each surface and writes private PNGs plus a manifest.
+
+`background-browser.ts` connects to one explicitly selected, user-owned socket advertised by the installed Open Browser Use CLI. It attaches the debugger before fixed CDP programs, validates session ownership and exact URL, and never activates a tab. Explicit file paths stay in the local process. File bytes travel in 192 KiB chunks and become browser File objects; all files stage before one assignment to the exact input. Browser file-list readback is structural because the bridge can reorder JSON object keys. Application checkpoints verify the subsequent visible state.
+
+`background-plan.ts` preflights 4–10 typed steps and target scope. Native targets include an expected PID/workspace; browser targets belong to an explicit session/tab allowlist. Each browser mutation requires an immediate text checkpoint. One connection and a kernel lease serialize that browser session without reserving desktop input. Leases track nested resource paths separately. Plan receipts use exclusive creation and sync progress before each operation. Existing ids always refuse execution, so an interrupted action is never automatically replayed. Receipts omit entered text, private URLs and file paths; explicit command results can contain private page text and artifact paths.
+
+Internal `desktopInput:false` registry annotations exclude background commands and non-focusing screenshots from the global input lease. Screenshot `allowFocus:true` retains the lease. Foreground adapters remain unchanged.
+
+## Isolated native desktop
+
+`isolated-desktop.ts` owns explicit headless Sway lifetimes, private runtime records
+and per-desktop input leases. `sway-ipc.ts` is a bounded client of the selected
+private compositor socket. Commands never discover or fall back to the host seat.
+Private container ids and exact PIDs come from that compositor's live tree.
+`isolated-environment.ts` removes host display/bus/activation routing and supplies
+private XDG directories. Policy-approved launches use this environment and dedicated
+browser profiles. The headless backend uses pixman and disables Xwayland.
+
+`native/pointer.c` supplies virtual pointer events and initial persistent seat
+capabilities. `native/keyboard.c` accepts one bounded action, acknowledges its
+compositor roundtrip through a private receipt, and retains its device without a
+command channel. `isolated-keyboard.ts` retires the preceding inactive client only
+after replacement, preventing Sway's null-keymap transition. Literal text uses
+printable physical codes and bounded Unicode keymaps; shortcuts use a complete US
+keymap. Dispatch receipts still need application verification.
+
+`isolated-process.ts` checks uid, PID start time and both private environment markers.
+The fixed Python cleanup helper rechecks identity through Linux pidfds before
+signalling, including reparented session processes. Stop preserves files and rejects
+remaining live processes. The compositor, private bus and fixed device clients are
+explicit session resources; there is no Saarthi daemon or command transport.

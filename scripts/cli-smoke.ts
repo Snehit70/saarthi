@@ -33,6 +33,7 @@ function sampleValue(field: string, schema: z.ZodTypeAny): unknown {
   if (base._def.typeName === "ZodString") {
     const preferred: Record<string, string> = {
       windowId: "0x111",
+      desktopId: "0000000000000000",
       workspace: "1",
       query: "smoke",
       text: "smoke",

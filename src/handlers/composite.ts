@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { audit } from "../lib/audit.js";
 import { formatError, HyprlandError, sendShortcut } from "../lib/hyprland.js";
 import { captureScreenshot } from "../lib/screenshot.js";
 import type { WindowId } from "../lib/types.js";
-import { commandExists, sleep } from "../lib/util.js";
+import { sleep } from "../lib/util.js";
 import {
   normalizeKey,
   normalizeModifiers,
@@ -21,7 +19,7 @@ import { performFindTextOnScreen, resolveTextClickPoint } from "../lib/text-loca
 import { server } from "../registry.js";
 import { dryRun, gridSession, persistGridSession, screenshotDirDefault } from "../runtime.js";
 
-const execFileAsync = promisify(execFile);
+import { typeText } from "../lib/typing.js";
 
 server.registerTool(
   "click_wait_retry",
@@ -237,8 +235,7 @@ server.registerTool(
         if (!args.text) throw new HyprlandError("INPUT_FAILED", "text is required for action=type_text");
         const safeText = sanitizeTypedText(args.text);
         if (!dryRun) {
-          if (!(await commandExists("wtype"))) throw new HyprlandError("INPUT_FAILED", "wtype is not installed");
-          await execFileAsync("wtype", [safeText]);
+          await typeText(safeText);
         }
         actionSummary = { action: "type_text", textLength: safeText.length };
       }

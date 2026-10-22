@@ -31,6 +31,7 @@ const ERROR_EXIT_CODES: Record<string, number> = {
   DISPATCH_FAILED: 12,
   SCREENSHOT_FAILED: 13,
   INPUT_FAILED: 14,
+  INPUT_BUSY: 18,
   NUMERIC_INVALID: 14,
   OCR_FAILED: 15,
   ATSPI_FAILED: 15,
@@ -91,7 +92,8 @@ function optionName(field: string): string {
 function commandHelp(tool: RegisteredTool): string {
   const options = Object.entries(tool.config.inputSchema).map(([field, schema]) => {
     const base = unwrap(schema);
-    const typeName = base._def.typeName === "ZodBoolean" ? "" : ` <${base._def.typeName.replace("Zod", "").toLowerCase()}>`;
+    const typeName =
+      base._def.typeName === "ZodBoolean" ? "" : ` <${base._def.typeName.replace("Zod", "").toLowerCase()}>`;
     const description = schema.description ? `  ${schema.description}` : "";
     return `  --${optionName(field)}${typeName}${description}`;
   });
@@ -146,7 +148,8 @@ function parseArguments(tool: RegisteredTool, argv: string[]): Record<string, un
 
   const primary = PRIMARY_POSITIONALS[tool.name];
   if (positionals.length > 0 && primary) raw[primary] = coerceValue(tool.config.inputSchema[primary], positionals[0]);
-  if (positionals.length > (primary ? 1 : 0)) throw new Error(`Unexpected positional argument: ${positionals[primary ? 1 : 0]}`);
+  if (positionals.length > (primary ? 1 : 0))
+    throw new Error(`Unexpected positional argument: ${positionals[primary ? 1 : 0]}`);
   return z.object(tool.config.inputSchema).parse(raw);
 }
 
@@ -163,7 +166,11 @@ function errorResult(error: unknown): CliResult {
   const details = Array.isArray((candidate as { candidates?: unknown }).candidates)
     ? `\nCandidates: ${JSON.stringify((candidate as { candidates: unknown[] }).candidates)}`
     : "";
-  return failure(candidate?.code ? `[${candidate.code}] ${message}${details}` : message, candidate?.code ? (ERROR_EXIT_CODES[candidate.code] ?? 1) : 2);
+  const progress = (candidate as { details?: unknown }).details;
+  return failure(
+    (candidate?.code ? `[${candidate.code}] ${message}${details}` : message) + (progress ? `\nProgress: ${JSON.stringify(progress)}` : ""),
+    candidate?.code ? (ERROR_EXIT_CODES[candidate.code] ?? 1) : 2,
+  );
 }
 
 export async function executeCli(

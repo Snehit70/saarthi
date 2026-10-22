@@ -166,27 +166,29 @@ Rules:
 - Branch on the returned command `exitCode`; output text is not proof of success.
 - Do not create or kill tmux sessions, windows, or panes.
 
-## Zen Browser
+## Browsers
 
-Start with live discovery:
+Discover the actual session before choosing a browser:
 
 ```bash
 saarthi browser discover --json
-saarthi browser focus --title-contains Zen --json
-saarthi browser open-url --url https://example.com --readiness title-change --json
+saarthi browser focus --browser helium --json
+saarthi browser open-url https://example.com --browser firefox --json
+saarthi browser action --window-id 0xABC --action next-tab --json
+saarthi browser action --window-id 0xABC --action find --query "Sign in" --json
 ```
 
-Use the existing local Zen profile so authentication, containers, and extensions remain intact. Do not attach a second automation engine, modify browser settings, inspect stored credentials, or create a clean profile for user-facing work.
+Supported identities are Zen, Firefox, LibreWolf, Floorp, Helium, Chromium, Chrome, Brave, Vivaldi, and Edge. Automatic selection prefers the focused browser, then a single running identity. Specify a browser or exact window when matches are ambiguous. A running browser can be reused even if its launcher is unavailable. Actual launches still require policy approval and a launch slot.
 
-For page targeting, prefer `saarthi browser vimium-hint`; use `saarthi ui find` if accessibility is available, then OCR/grid. Browser chrome should use browser commands, shortcuts, or verified grid coordinates rather than Vimium.
+Use existing browser profiles for host browser work. Do not change their preferences or inspect credentials. An explicitly requested isolated desktop uses its own fresh automation profiles through `desktop launch`; never attach these to the host profile. Zen workspace stepping remains Zen-only and uses configured shortcuts.
 
-Current machine facts that must still be rediscovered when relevant:
+Use accessibility when available, then OCR/grid. Phrase OCR supports labels such as "Sign in" on the same line. Check the actual screenshot before choosing a query. Empty AT-SPI page results are a routing signal, not evidence that the page has no controls.
 
-- Zen is the Flatpak app `app.zen_browser.zen`.
-- Vertical tabs are on the right and the URL bar floats.
-- Page AT-SPI has historically been unavailable; verify before relying on it.
+For a configured Vimium extension, `browser vimium-hint --visible-text` sends an observed hint label. `--no-commit` opens hints without typing. The command never appends Enter, because some Vimium modes activate as soon as a label matches. Confirm gated action kinds before sending hint text, then verify the resulting state. If a filtering mode needs Enter, inspect first and send it as a separate explicitly targeted keypress.
 
-Do not act on page content when `browser open-url` returns `readiness.ready:false`. Wait for a strong page anchor or inspect a fresh screenshot first.
+Title readiness is only a heuristic. URL opening exits `17` on readiness timeout even when navigation may already have occurred. Inspect before retrying to avoid duplicate tabs or repeated actions. `browser action` and Vimium return `verificationRequired`; verify with page accessibility, OCR, or a fresh screenshot.
+
+The `input` commands send global foreground input, including across different Hyprland workspaces. Use the separate `desktop` commands for independent native input. Set `--window-id` on `input type` and `input key-press` to reject focus drift. Focus checks reduce accidental input but do not provide background isolation or an atomic transaction with the compositor.
 
 ## Hyprland Adapter Safety
 
@@ -208,3 +210,98 @@ Use these failure labels when reporting evidence: `focus_drift`, `cursor_out_of_
 ## Evidence
 
 For non-trivial tasks report the target window id, baseline screenshot path, accessibility/OCR/grid anchor used, final verification screenshot path, and whether the final action was performed or only prepared. Use `saarthi observability session-trace-export --json` and `logs/actions/run.jsonl` for diagnosis.
+
+## Fast discovery and local knowledge
+
+Resolve files, profiles and prior experience with one command each before touching the UI. Do not browse folders or profile menus visually when these answer the question.
+
+```bash
+saarthi knowledge lookup --query "whatsapp attach images" --json
+saarthi file find --directory ~/Pictures/Screenshots --name-contains kavach --type image --json
+saarthi browser profiles --browser helium --json
+saarthi browser open-url https://web.whatsapp.com --browser helium --profile personal --json
+```
+
+- `file find` matches filenames case-insensitively in an explicit directory, verifies image signatures for `--type image`, never follows symlinks and returns natural order. Raise `--max-depth` only when the user's folder has subfolders. `complete: false` means the bound was hit; narrow the query instead of guessing.
+- `browser profiles` lists Chromium-family profile directories and display names. Pass the exact directory or a unique display name to `--profile`. When the user names a profile that does not resolve (for example "Profile 1" or a number), show the listed names and ask; never map numbers to positions.
+- Commands resolve the live Hyprland display, runtime directory and session bus themselves. Do not export `WAYLAND_DISPLAY` or guess `wayland-1`.
+- `knowledge lookup` returns earlier observations ranked by matching terms, with success/failure counts and expiry. Treat entries as hints to revalidate: re-observe windows, selectors and coordinates before acting. Expired entries rank last.
+- After a task succeeds or fails in an informative way, record what a future run would need. Write a mode-600 JSON file and run `knowledge remember --entry-file PATH`:
+
+```json
+{"id": "helium-whatsapp-attach", "app": "helium", "profile": "personal",
+ "title": "Attach images in WhatsApp Web", "summary": "What worked and what to avoid",
+ "anchors": ["Attach button left of the composer"], "steps": ["Open self chat", "Attach", "Photos & videos"],
+ "verification": "4 thumbnails in preview tray", "outcome": "succeeded", "elapsedMs": 9000}
+```
+
+Reuse the same `id` to refine an entry; counts accumulate. Use a new id for a different app or profile. Do not store credentials, message contents, clipboard data or personal file contents.
+
+## Semantic actions and image history
+
+Prefer `ui act --window-id ID --name EXACT --role text --action set-text --text VALUE` for verifiable replacement, and `ui read-text` for exact readback. Do not use password fields. A selector must identify one current enabled on-screen element. `ui find/tree --window-id ID` scopes traversal and translates frame-relative positions into screen coordinates.
+
+For “paste the last four images here only”, identify and focus the exact destination first. Run `clipboard images --limit 4` for metadata, then `clipboard paste-images --window-id ID --target-name EXACT --count 4`. The destination must expose a uniquely named focused editable field. The command skips text entries and never presses Enter. Inspect the resulting attachment list and count before claiming success. With inaccessible browser composers, export images and use the native file chooser, then verify attachments. Do not substitute a guessed field.
+
+The preferred original clipboard MIME is restored, including an empty selection. Other MIME representations are not preserved; history watchers may record temporary images. If a user copies new content during the operation, the command stops and keeps that new selection. Keep exported files and entered text out of public logs and PRs.
+
+For repeated semantic work, a private JSON plan passed to `ui batch --window-id ID --steps-file PATH` reduces process overhead. Maximum 20 steps; every target is re-resolved and every text write checked. On a partial failure inspect completed work before constructing a new plan. Never replay the entire batch blindly.
+
+Exit 18 means another Saarthi process owns desktop input. Wait for that operation to finish and inspect before retrying. The input lease releases on owner death; it does not protect against the user's keyboard or unrelated automation.
+
+After an accessibility invocation, treat `verificationRequired` literally. A successful advertised button action can precede its UI effect. Observe the expected task identity, saved count, or next-record identity before editing subsequent records. If a bounded wait ends with unchanged state, fail and inspect; do not continue using the previous task's data.
+
+## Background work and planning ahead
+
+Prefer non-disruptive operations when the user wants to keep working. `screenshot capture --target window --window-id ID` uses native surface capture by default, even on an inactive workspace. `screenshot workspace --workspace 4 --json` returns a private set of window PNGs and positions. View every screenshot you rely on. This is not an exact composited workspace scene. Missing capture support must fail without focusing; use `--allow-focus` only when foreground disruption is explicitly acceptable.
+
+`app launch-and-wait --app-name ALIAS --workspace 4` uses a silent launch rule by default. Verify the returned window and workspace, because applications can reuse existing windows. Ordinary keyboard, pointer and foreground accessibility actions still share the user's seat. Do not promise input isolation merely because a window is on another workspace.
+
+For browser work without global input, use the optional existing Open Browser Use connection:
+
+1. Inspect `open-browser-use profiles --connected` and select the task's actual browser/profile. Saarthi does not start or install a browser bridge.
+2. Use explicit `--browser-target`, `--profile` and a unique `--session-id` for `browser background-open/tabs/act/finish`. These commands control only their session's owned tabs. They never claim unrelated user tabs.
+3. Use a private, user-owned `chmod 600` JSON step file with `tabId`, exact `expectedUrl` and `action:"inspect"`. Inspect returns current control selectors. Resolve selectors again after navigation or layout changes. Password fields are unsupported.
+4. Choose `fill`, `click`, `read`, `files`, `wait-text` or `screenshot` using observed targets. `files` accepts explicit local paths, stages bounded file bytes, and attaches them without opening a native dialog or changing extension permissions. Hidden file inputs are supported. Verify the application's actual attachment list afterward; file-list readback is not server upload completion.
+5. Capture the owned background tab with a browser `screenshot` step. A native browser-window screenshot shows its physically selected tab, which can differ from the task's logical active tab.
+6. Finish with `browser background-finish`; keep owned tab ids only for a requested live handoff. Never close or move unrelated user tabs.
+
+Before a predictable sequence, plan 4–10 steps ahead based on current observations. Put the plan in a private JSON file and use `plan run --plan-file PATH`. Include an explicit owned tab allowlist and a browser connection. Native capture steps additionally declare window id, PID and allowed workspace. The executor supports browser actions and native capture, without global keyboard/mouse actions. Browser tab ownership does not establish the containing Hyprland workspace.
+
+Every browser mutation must immediately precede a same-tab `wait-text` checkpoint or a `read` checkpoint with `expectText`. Use checks that establish actual task progress, such as attachment names, saved indicators, next-record identity or the requested result. Pause planning at unknown navigation, permission, native-dialog or layout boundaries. Do not fill a plan with guesses to reach the minimum step count. Use a single background action when fewer than four steps are justified.
+
+The plan shares one browser connection and session lease, checks scope throughout, records durable progress before each operation and stops on the first failure. An existing plan id always refuses execution. Inspect the reported completed count, in-flight step and actual page; prepare a new id with only remaining work. Never blindly replay a completed or uncertain action. Confirmation fields require existing user authorization under the consent rules above.
+
+Examples and the full schema are in `docs/BACKGROUND-WORK.md`. Cross-origin frames, shadow-root selectors, trusted native events and system permission dialogs may require another supported workflow. Keep private plans, entered text, attachments and page output out of public logs and PRs.
+
+## Independent native desktop
+
+For native tasks that must run while the user keeps typing or moving their mouse,
+use `desktop start`. This launches a private headless Sway desktop with a separate
+seat. A hidden Hyprland workspace alone does not provide this isolation.
+
+1. Start one desktop only when needed, then keep its returned id. Inspect existing
+   task state before creating another. At most three desktops may run.
+2. Launch policy aliases through `desktop launch --desktop-id ID --app-name APP`.
+   Apps must start inside the private desktop. Existing host windows cannot move
+   into it. Private browser profiles do not inherit logins or extensions.
+3. Read `desktop status` and view `desktop capture`. Its integer window ids belong
+   to the private Sway tree and must never be passed to host Hyprland commands.
+4. Write 1 to 10 typed actions to a private mode-600 JSON file. Each action requires
+   the current private window id and exact PID. Run `desktop input --desktop-id ID
+   --actions-file PATH`. Use observed coordinates and verify actual app state.
+5. For native file pickers, inspect again after opening the dialog. Use its new
+   window id and PID, Ctrl+L, the requested absolute path and an explicit navigation
+   Enter. Verify selected filenames or attachments after the picker closes.
+6. Stop on unknown state or partial failure. Inspect the uncertain action before
+   preparing the remaining batch. A successful receipt proves dispatch, not task
+   completion. Do not automatically replay a failed batch.
+7. Save requested artifacts, then call `desktop stop` when finished. This closes
+   session-owned apps, bus, compositor and device clients. Never signal host apps.
+
+The latest keyboard client stays alive until its replacement is active, with no
+command listener. If it dies, stop and recreate the desktop. No input falls back
+to the host. Different desktops use separate input leases. They share the user's
+filesystem, so this is not a security sandbox. Software rendering and Wayland-only
+apps limit compatibility. Use the existing background browser adapter for logged-in
+tab tasks. Full schemas and limitations: `docs/ISOLATED-DESKTOP.md`.

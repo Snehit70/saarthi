@@ -14,12 +14,12 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "app launch",
-    "schemaSha256": "ca7cc0a82f2a6f6476650364524182cfec8cb6dc2f14f687a928d2b9afa2b701",
+    "schemaSha256": "0d84feee490b111cebf78ac4a8a190ee805a1db866ad6a5dc76b1bef99e78fb1",
     "tool": "app_launch",
   },
   {
     "command": "app launch-and-wait",
-    "schemaSha256": "c276fb3d7b0b8dfce48b3b6aa5fa24767b969ad9e0ffcbe39b7c8d983571b236",
+    "schemaSha256": "bdbbb1b94c4d062ea85010ccff45a12622127d6710d81add81741155ac258368",
     "tool": "app_launch_and_wait",
   },
   {
@@ -28,19 +28,49 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "app_list",
   },
   {
+    "command": "browser action",
+    "schemaSha256": "df2f605bf40d27910d6765d9d3100782b452df9f8257595b67f0d6b6376dd26b",
+    "tool": "browser_action",
+  },
+  {
+    "command": "browser background-act",
+    "schemaSha256": "b75355007afa024ec4536b6ee958b871e7e453ea42cde6a441c4c69c0d644d02",
+    "tool": "browser_background_act",
+  },
+  {
+    "command": "browser background-finish",
+    "schemaSha256": "093f4d26d8c0b49ce4c38f9fab24b73289da47f82192bbffeb198360aa4e725e",
+    "tool": "browser_background_finish",
+  },
+  {
+    "command": "browser background-open",
+    "schemaSha256": "99e1c6973147afade85caf03274b7f5367305252bdfcd01a318601f268ec5aaf",
+    "tool": "browser_background_open",
+  },
+  {
+    "command": "browser background-tabs",
+    "schemaSha256": "039eee0ef7886cf10562dbd72c649e3691f6c39b41790ecbb208f89d71457a09",
+    "tool": "browser_background_tabs",
+  },
+  {
     "command": "browser discover",
     "schemaSha256": "8fa76877ae1f65e2ca7eb1e57adb5e1e6134ff96b260684ff61f6f54fd795254",
     "tool": "browser_discover",
   },
   {
     "command": "browser focus",
-    "schemaSha256": "ee80e17f461cf1fccf55f935b34b4a0e9bf2fc4ed2f98fcd215b886675469e6c",
+    "schemaSha256": "6c0c19bd0e6ee6b6acd1d8d07f9d944e063615332f1e232b000546b6912fbe0a",
     "tool": "browser_focus",
   },
   {
     "command": "browser open-url",
-    "schemaSha256": "49656314d18f2477c8e0a43835efd9d1176e5db80e782e4acb00cf1c556c2941",
+    "schemaSha256": "4c68007ac1886c479818a4b0af3e03265d97fbbf6d43f72fbc80f45a18d7d52b",
     "tool": "browser_open_url",
+  },
+  {
+    "command": "browser profiles",
+    "schemaSha256": "36f78f7b0a2897e6a83ea3b862d8afb8cfd78c69280a50f691168582e53030ba",
+    "tool": "browser_profiles",
   },
   {
     "command": "browser space-step",
@@ -49,7 +79,7 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "browser vimium-hint",
-    "schemaSha256": "1024ddf24103605c6e286bef06548cb62643013bddda239a742646791d58b0e0",
+    "schemaSha256": "6810409471f3d7eefb9a1b1cd744b3dab42dc60712c260e97b12e966843664cd",
     "tool": "browser_vimium_hint",
   },
   {
@@ -63,13 +93,43 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "click_wait_retry",
   },
   {
+    "command": "clipboard export-images",
+    "schemaSha256": "69040b01420dd291e42c529cbdb0531609d5aeefead8e6ade5ee2d64ff6f3e6d",
+    "tool": "clipboard_export_images",
+  },
+  {
+    "command": "clipboard images",
+    "schemaSha256": "632253324082ea73ecd18788e06ad6831b44f1615b5315b73d156d9a307b022b",
+    "tool": "clipboard_images",
+  },
+  {
+    "command": "clipboard paste-images",
+    "schemaSha256": "2c1d8384fcb9a4ad57e0456322a48eae7a9f6e7aff2a6ceb85de564b792d9039",
+    "tool": "clipboard_paste_images",
+  },
+  {
+    "command": "desktop capture",
+    "schemaSha256": "0ec983174160d68881d524ddf298c4496707dac33f42eb98422be2a530ce0305",
+    "tool": "desktop_capture",
+  },
+  {
     "command": "observability desktop-health",
     "schemaSha256": "62fcaf939d39c8d08b28cd1b59e8212152ef551d34aa41787ebfbf31817cc3ce",
     "tool": "desktop_health",
   },
   {
+    "command": "desktop input",
+    "schemaSha256": "cff83ee256b9f2656d2339ab2b9894ba061b04125eab6c8e978ee5d07b58c3e9",
+    "tool": "desktop_input",
+  },
+  {
+    "command": "desktop launch",
+    "schemaSha256": "6ffda31382f61e96923850ae555a3dbda089d9ac74d46356741f4af663d247b5",
+    "tool": "desktop_launch",
+  },
+  {
     "command": "screenshot capture",
-    "schemaSha256": "053d00c0aa49c9ac8ea959d92ca3ced293d23a58023c0e6e3caa0598ee1fe78b",
+    "schemaSha256": "3e7261a3c4b3afaab22a24ef3160b5b3b77c6738b7799bd1f30e654a889171df",
     "tool": "desktop_screenshot",
   },
   {
@@ -79,8 +139,28 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "screenshot save",
-    "schemaSha256": "85d4e993987063025a5b6ec0d4896a214a6f805c9de59b56a2efca83ddf94072",
+    "schemaSha256": "773d8ed06f742ba202088fcb0674abc1a67ea3e59adbd13a9dc6460940ccb0e6",
     "tool": "desktop_screenshot_save",
+  },
+  {
+    "command": "desktop start",
+    "schemaSha256": "c48b2d8a53e3b3622198cfef95d2236a8fb3d3fee4c9d4915587e739b5a61d34",
+    "tool": "desktop_start",
+  },
+  {
+    "command": "desktop status",
+    "schemaSha256": "622054e858797da33375607027162797a84f39277463ee8ceda92313e148d5e5",
+    "tool": "desktop_status",
+  },
+  {
+    "command": "desktop stop",
+    "schemaSha256": "356f3baff20108610b30d84a45d5e85bda188e90a9f9f6dd4957710d3ce8034a",
+    "tool": "desktop_stop",
+  },
+  {
+    "command": "file find",
+    "schemaSha256": "31aac9e600b91a555d59ba2aa45091bd25b4bf2783eb696454f6e5392532d25d",
+    "tool": "file_find",
   },
   {
     "command": "text find",
@@ -119,8 +199,18 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "input key-press",
-    "schemaSha256": "3ed3c46245c85ca44bd048925b8c011e372f94a63bb88983cc3e55196cbd7f46",
+    "schemaSha256": "a589b1353b6b177a90275932c3623ed433814f573ff35d1cc349a85e4de7a3e9",
     "tool": "key_press",
+  },
+  {
+    "command": "knowledge lookup",
+    "schemaSha256": "633d44c126b73ed42cfe19cdc51b3edfd625eacabcf27585c90d041ab4432e00",
+    "tool": "knowledge_lookup",
+  },
+  {
+    "command": "knowledge remember",
+    "schemaSha256": "fb8c4af9667a996febfb2de1f4f90a8c6e5394d9d83885e1877dd234d6c2ed61",
+    "tool": "knowledge_remember",
   },
   {
     "command": "observability metrics-report",
@@ -178,6 +268,11 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "tool": "overlay_task_start",
   },
   {
+    "command": "plan run",
+    "schemaSha256": "b83937b672c595dcb597b2823c44c1425f505e0524eb80b26f404d3ef292e6d4",
+    "tool": "plan_run",
+  },
+  {
     "command": "text resolve-point",
     "schemaSha256": "1c5861a92d2d544d743f4c34cf087811878a6b67fab94f57f14e367f36137d6d",
     "tool": "resolve_text_point",
@@ -186,6 +281,11 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
     "command": "observe screenshot-compare",
     "schemaSha256": "2df5796559b1bd1fa8f1ac19548e66df13ebb1441677d7001cf3805b319aa0d7",
     "tool": "screenshot_compare",
+  },
+  {
+    "command": "screenshot workspace",
+    "schemaSha256": "3068368ea8d4f01afee18941a9e05b8d7eeae37081185059d5c984e48c9fede4",
+    "tool": "screenshot_workspace",
   },
   {
     "command": "observability session-trace-export",
@@ -214,17 +314,32 @@ exports[`CLI registry contract > matches the committed command and zod schema sn
   },
   {
     "command": "input type",
-    "schemaSha256": "9bf76368e7db410bcf84ff211d292c5bc3bc6a2fcfc963b4c57e0e5b4973ead8",
+    "schemaSha256": "bee9fbf5bf39ab2ae8a665d95777af21d20685e9694c2042a01cb3e37d13fb3d",
     "tool": "type_text",
   },
   {
+    "command": "ui act",
+    "schemaSha256": "26f41f6db427b04054b769c0049644aac3e8c21852b72f612eba4b1e0c0487d9",
+    "tool": "ui_act",
+  },
+  {
+    "command": "ui batch",
+    "schemaSha256": "57f7cd77b386cd585b34db6989c0fbbf34f7cbbe012435c958d0e4b916e4e7f5",
+    "tool": "ui_batch",
+  },
+  {
     "command": "ui find",
-    "schemaSha256": "c2e390be1d2a8a6aec3d7df1a08b3c1ca9a5b5cdefd1f0065987bdc27eca15e0",
+    "schemaSha256": "51dd6d837430a7b84784d289396158fdd4794c337b2a1d2f6fd6f8aae4110b5d",
     "tool": "ui_find",
   },
   {
+    "command": "ui read-text",
+    "schemaSha256": "4d20f8f7f39681292941fc8382144b9f6f5f8a4e02d0be531cde0632e0b52673",
+    "tool": "ui_read_text",
+  },
+  {
     "command": "ui tree",
-    "schemaSha256": "14c6a82df43d22c2ae98834d017ee1bb21344ef3e34ba5034c81b5119262912a",
+    "schemaSha256": "58bfac7778827b8d9f073916055777abb8f4a71142e1d85b213b76fe6a17958c",
     "tool": "ui_tree",
   },
   {
