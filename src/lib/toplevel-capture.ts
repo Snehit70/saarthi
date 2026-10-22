@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -20,7 +21,7 @@ const mappings = z
  * focus, move, or temporarily show the window as a fallback. */
 export async function captureToplevel(windowId: WindowId): Promise<Buffer> {
   const before = await getWindowOrThrow(windowId);
-  const env = await hyprlandEnvironment();
+  const env = await desktopEnvironment();
   try {
     const { stdout } = await run(join(projectRoot(), "dist/native/toplevels"), [], {
       env,

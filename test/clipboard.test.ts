@@ -1,3 +1,4 @@
+vi.mock("../src/lib/desktop-environment.js", () => ({ desktopEnvironment: async () => ({ ...process.env }) }));
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

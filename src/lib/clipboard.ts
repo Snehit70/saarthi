@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -23,14 +24,15 @@ export interface ExportedClipboardImage extends ClipboardImage {
   mime: string;
 }
 
-function clipboardProcess(
+async function clipboardProcess(
   command: "cliphist" | "wl-paste" | "wl-copy",
   args: string[],
   input?: Buffer,
   maxBuffer = MAX_IMAGE_BYTES,
 ): Promise<Buffer> {
+  const env = ["wl-paste", "wl-copy"].includes(command) ? await desktopEnvironment() : process.env;
   return new Promise((resolve, reject) => {
-    const child = execFile(command, args, { timeout: 5000, encoding: "buffer", maxBuffer }, (error, stdout, stderr) => {
+    const child = execFile(command, args, { env, timeout: 5000, encoding: "buffer", maxBuffer }, (error, stdout, stderr) => {
       if (
         error &&
         command === "wl-paste" &&

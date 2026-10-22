@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync } from "node:fs";
@@ -87,7 +88,7 @@ export async function queryAtspi(q: AtspiQuery): Promise<AtspiResult> {
 
   let stdout: string;
   try {
-    const env = q.focused ? await hyprlandEnvironment() : process.env;
+    const env = await desktopEnvironment();
     const res = await execFileAsync("python3", args, { env, timeout: 15000, maxBuffer: 8 * 1024 * 1024 });
     stdout = String(res.stdout);
   } catch (error) {

@@ -1,3 +1,4 @@
+vi.mock("../src/lib/desktop-environment.js", () => ({ desktopEnvironment: async () => ({ ...process.env }) }));
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ exec: vi.fn(), end: vi.fn(), on: vi.fn() }));
 vi.mock("node:child_process", () => ({ execFile: mocks.exec }));

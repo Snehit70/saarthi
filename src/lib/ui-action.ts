@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { assertWindowFocus, HyprlandError, hyprlandEnvironment } from "./hyprland.js";
@@ -18,7 +19,7 @@ export interface UiActionInput {
 export async function performUiAction(input: UiActionInput): Promise<Record<string, unknown>> {
   const window = await assertWindowFocus(input.windowId);
   if (!window.pid) throw new HyprlandError("INPUT_FAILED", "Target window has no process identity");
-  const env = await hyprlandEnvironment();
+  const env = await desktopEnvironment();
   return new Promise((resolve, reject) => {
     const child = execFile(
       "python3",

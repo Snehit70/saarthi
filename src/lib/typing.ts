@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { sanitizeTypedText } from "./input.js";
 import { HyprlandError } from "./hyprland.js";
@@ -16,12 +17,13 @@ export function typingTimeout(text: string, delayMs = 0): number {
 export async function typeText(text: string, delayMs = 0): Promise<void> {
   const timeout = typingTimeout(text, delayMs);
   const safeText = sanitizeTypedText(text);
+  const env = await desktopEnvironment();
   await new Promise<void>((resolve, reject) => {
     const args = delayMs > 0 ? ["-d", String(delayMs), "-"] : ["-"];
     const child = execFile(
       "wtype",
       args,
-      { timeout, signal: inputOwnershipSignal(), maxBuffer: 64 * 1024 },
+      { env, timeout, signal: inputOwnershipSignal(), maxBuffer: 64 * 1024 },
       (error) => {
         if (error)
           reject(

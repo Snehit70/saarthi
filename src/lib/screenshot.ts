@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "./desktop-environment.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { WindowId } from "./types.js";
@@ -68,6 +69,7 @@ export async function captureScreenshot(input: {
     }
 
     const { stdout, stderr } = await execFileAsync("grim", args, {
+      env: await desktopEnvironment(),
       encoding: "buffer",
       timeout: 10000,
       maxBuffer: 25 * 1024 * 1024,

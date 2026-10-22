@@ -1,3 +1,4 @@
+import { desktopEnvironment } from "../lib/desktop-environment.js";
 import { z } from "zod";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -164,7 +165,11 @@ server.registerTool(
     }
     await mkdir(dirname(outPath), { recursive: true });
     const geometry = `${x},${y} ${width}x${height}`;
-    await execFileAsync("grim", ["-g", geometry, outPath]);
+    await execFileAsync("grim", ["-g", geometry, outPath], {
+      env: await desktopEnvironment(),
+      timeout: 10000,
+      maxBuffer: 65536,
+    });
     await audit("desktop_screenshot_area", { x, y, width, height, path: outPath }, dryRun);
     return {
       content: [{ type: "text", text: outPath }],
